@@ -302,7 +302,7 @@ class CloudRequestEngine extends Engine {
 
     // licensekey is optional
     if (this.licenseKey) {
-      url += '&license=' + this.licenseKey;
+      url += '?license=' + this.licenseKey;
     }
 
     const self = this;
