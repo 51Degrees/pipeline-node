@@ -20,8 +20,8 @@
     "jest": "^27.5.1"
   },
   "dependencies": {
-    "fiftyone.pipeline.core": "^4.4.45",
-    "fiftyone.pipeline.engines": "^4.4.45"
+    "fiftyone.pipeline.core": "^4.4.46",
+    "fiftyone.pipeline.engines": "^4.4.46"
   },
   "contributors": [
     "Filip Hnízdo <filip@octophin.com> (https://octophindigital.com/)",
