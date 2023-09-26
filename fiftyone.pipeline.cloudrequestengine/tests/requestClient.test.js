@@ -32,14 +32,7 @@ require('module').Module._initPaths();
 
 const noCheck = function () {};
 
-let server;
-
-afterEach(() => { // eslint-disable-line
-  if (server) {
-    server.close();
-    server = undefined;
-  }
-});
+let INITIAL_PORT = 3000;
 
 const getTest = function (origin, writeResponse, checkRequest, checkResponse, done) {
   const client = new RequestClient();
@@ -48,11 +41,14 @@ const getTest = function (origin, writeResponse, checkRequest, checkResponse, do
     writeResponse(res);
   };
 
-  server = http.createServer(requestListener);
-  server.listen(3000, () => {
-    const response = client.get('http://localhost:3000', origin);
+  let server = http.createServer(requestListener);
+  server.listen(INITIAL_PORT, () => {
+    const response = client.get(`http://localhost:${INITIAL_PORT}`, origin);
     checkResponse(response)
       .finally(() => {
+        INITIAL_PORT++;
+        server.close();
+        server = undefined;
         done();
       });
   });
@@ -65,11 +61,14 @@ const postTest = function (data, origin, writeResponse, checkRequest, checkRespo
     writeResponse(res);
   };
 
-  server = http.createServer(requestListener);
-  server.listen(3000, () => {
-    const response = client.post('http://localhost:3000', data, origin);
+  let server = http.createServer(requestListener);
+  server.listen(INITIAL_PORT, () => {
+    const response = client.post(`http://localhost:${INITIAL_PORT}`, data, origin);
     checkResponse(response)
       .finally(() => {
+        INITIAL_PORT++;
+        server.close();
+        server = undefined;
         done();
       });
   });
