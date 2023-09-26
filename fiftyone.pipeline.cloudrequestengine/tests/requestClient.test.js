@@ -32,7 +32,7 @@ require('module').Module._initPaths();
 
 const noCheck = function () {};
 
-let INITIAL_PORT = 3000;
+let PORT = 3000;
 
 const getTest = function (origin, writeResponse, checkRequest, checkResponse, done) {
   const client = new RequestClient();
@@ -42,11 +42,11 @@ const getTest = function (origin, writeResponse, checkRequest, checkResponse, do
   };
 
   let server = http.createServer(requestListener);
-  server.listen(INITIAL_PORT, () => {
-    const response = client.get(`http://localhost:${INITIAL_PORT}`, origin);
+  server.listen(PORT, () => {
+    const response = client.get(`http://localhost:${PORT}`, origin);
     checkResponse(response)
       .finally(() => {
-        INITIAL_PORT++;
+        PORT++;
         server.close();
         server = undefined;
         done();
@@ -62,11 +62,11 @@ const postTest = function (data, origin, writeResponse, checkRequest, checkRespo
   };
 
   let server = http.createServer(requestListener);
-  server.listen(INITIAL_PORT, () => {
-    const response = client.post(`http://localhost:${INITIAL_PORT}`, data, origin);
+  server.listen(PORT, () => {
+    const response = client.post(`http://localhost:${PORT}`, data, origin);
     checkResponse(response)
       .finally(() => {
-        INITIAL_PORT++;
+        PORT++;
         server.close();
         server = undefined;
         done();
