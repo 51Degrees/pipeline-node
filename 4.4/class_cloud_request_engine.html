@@ -122,6 +122,20 @@ Public Member Functions</h2>
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
+<tr class="c-table__row memitem:a40cd1181ad3d4f041703c19ccd3a6cf5"><td class="c-table__cell">get<!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_cloud_request_engine.html#a40cd1181ad3d4f041703c19ccd3a6cf5">keysAndPropertiesFetched</a> ()
+<!-- startMemberDescription -->
+<div class="c-table__desc memdesc:a40cd1181ad3d4f041703c19ccd3a6cf5">Check if the keys and properties have been fetched.  <a href="#a40cd1181ad3d4f041703c19ccd3a6cf5">More...</a><!-- endMemberDescription -->
+</div></td></tr>
+<!-- member dec start -->
+<!-- startMemberItem() -->
+<tr class="c-table__row memitem:a2895529dfb43acac9296a74af9178b39"><td class="c-table__cell"><!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_cloud_request_engine.html#a2895529dfb43acac9296a74af9178b39">fetchEvidenceKeysAndProperties</a> (resolveCallback, rejectCallback)
+<!-- startMemberDescription -->
+<div class="c-table__desc memdesc:a2895529dfb43acac9296a74af9178b39">Fetches evidence keys and properties data.  <a href="#a2895529dfb43acac9296a74af9178b39">More...</a><!-- endMemberDescription -->
+</div></td></tr>
+<!-- member dec start -->
+<!-- startMemberItem() -->
 <tr class="c-table__row memitem:a8171e23faf5ed0e213e2a7d8a88ff1cd"><td class="c-table__cell"><!-- insertMemberAlign -->
 &#160;</td><td class="c-table__cell"><a class="el" href="class_cloud_request_engine.html#a8171e23faf5ed0e213e2a7d8a88ff1cd">ready</a> ()
 <!-- startMemberDescription -->
@@ -489,6 +503,69 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - options.baseURL url the cloud service is located at if overriding default </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - options.cloudRequestOrigin The value to set for the Origin header when making requests to the cloud service. This is used by the cloud service to check that the request is being made from a origin matching those allowed by the resource key. For more detail, see the 'Request Headers' section in the <a href="https://cloud.51degrees.com/api-docs/index.html">cloud documentation</a>. </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">options.requestClient</span> - </dd>
+  </dd>
+</dl>
+<!-- endIndent -->
+
+</div>
+</div>
+</article>
+<article class="c-member">
+<a id="a2895529dfb43acac9296a74af9178b39"></a><!-- startMemberDoc -->
+
+<h2 class="c-member__title"><span class="c-member__anchor"><a href="#a2895529dfb43acac9296a74af9178b39">&#9670;&nbsp;</a></span>fetchEvidenceKeysAndProperties()</h2>
+
+<div class="c-member__main">
+<div class="c-member__head">
+<!-- startMemberDocName -->
+      <div class="c-member__split">
+        <div class="g-table g-table--overflow">
+          <table class="c-table c-table--article">
+            <tr class="c-table__row">
+              <td class="c-table__cell">CloudRequestEngine::fetchEvidenceKeysAndProperties <!-- endMemberDocName -->
+</td>
+<!-- startParameterList -->
+          <td>(</td>
+<!-- startFirstParameterType -->
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>resolveCallback</em>, <!-- endParameterName -->
+</td>
+        </tr>
+<!-- startParameterType -->
+        <tr>
+          <td class="c-table__cell"></td>
+          <td></td>
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>rejectCallback</em><!-- endParameterName -->
+&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td><!-- endParameterList -->
+</td>
+        </tr>
+<!-- endMemberDoc -->
+          </table>
+        </div>
+      </div>
+<!-- startLabels -->
+<div class="c-member__labels">
+<!-- writeLabel(inline) -->
+<span class="c-label">inline</span><!-- endLabels -->
+</div>
+</div><!-- startIndent -->
+<div class="c-member__body">
+
+<p>Fetches evidence keys and properties data. </p>
+<p>This method asynchronously fetches evidence keys and properties required for the operation. It uses Promises to handle data retrieval and provides callback functions for success and failure scenarios.</p>
+<dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{Function}</span> - resolveCallback - A callback function to be called when the data is successfully fetched. It will receive the current instance as a parameter.</dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{Function}</span> - rejectCallback - A callback function to be called when an error occurs during data retrieval. It will receive the error information as a parameter. </dd>
   </dd>
 </dl>
 <!-- endIndent -->
@@ -892,6 +969,48 @@ Public Member Functions</h2>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">True if the key has the prefix. </dd></dl>
+<!-- endIndent -->
+
+</div>
+</div>
+</article>
+<article class="c-member">
+<a id="a40cd1181ad3d4f041703c19ccd3a6cf5"></a><!-- startMemberDoc -->
+
+<h2 class="c-member__title"><span class="c-member__anchor"><a href="#a40cd1181ad3d4f041703c19ccd3a6cf5">&#9670;&nbsp;</a></span>keysAndPropertiesFetched()</h2>
+
+<div class="c-member__main">
+<div class="c-member__head">
+<!-- startMemberDocName -->
+      <div class="c-member__split">
+        <div class="g-table g-table--overflow">
+          <table class="c-table c-table--article">
+            <tr class="c-table__row">
+              <td class="c-table__cell">get CloudRequestEngine::keysAndPropertiesFetched <!-- endMemberDocName -->
+</td>
+<!-- startParameterList -->
+          <td>(</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><!-- endParameterName -->
+</td><td>)</td>
+          <td><!-- endParameterList -->
+</td>
+        </tr>
+<!-- endMemberDoc -->
+          </table>
+        </div>
+      </div>
+<!-- startLabels -->
+<div class="c-member__labels">
+<!-- writeLabel(inline) -->
+<span class="c-label">inline</span><!-- endLabels -->
+</div>
+</div><!-- startIndent -->
+<div class="c-member__body">
+
+<p>Check if the keys and properties have been fetched. </p>
+<p>This computed property determines whether the keys of a 'flowElementProperties' object and the 'evidenceKeyFilter' array both have elements, indicating that the necessary data has been fetched and is ready for use.</p>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{boolean} True if the keys and properties are fetched and ready; otherwise, false. </dd></dl>
 <!-- endIndent -->
 
 </div>
