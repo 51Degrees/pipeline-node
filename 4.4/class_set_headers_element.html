@@ -311,8 +311,7 @@ Public Member Functions</h2>
 <p>Construct the headers and their properties which can be set by the service. </p>
 <p>An example of the structure of the headers is: { 'Accept-CH': { name: 'Accept-CH', properties: [ 'device.SetHeaderBrowserAccept-CH', 'device.SetHeaderPlatformAccept-CH', 'device.SetHeaderHardwareAccept-CH' ] } }</p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{Pipeline}</span> - pipeline: The pipeline instance to get the properties from. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">pipeline</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{Pipeline}</span> - pipeline The pipeline instance to get the properties from. </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{object} Collection of headers which can be set in the response. </dd></dl>
@@ -360,8 +359,7 @@ Public Member Functions</h2>
 
 <p>Get the name of the header which the property relates to. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - propertyName: To get the header name from. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">propertyName</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - propertyName To get the header name from. </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{string} Header name. </dd></dl>
@@ -410,8 +408,7 @@ Public Member Functions</h2>
 <p>Get response headers (e.g. </p>
 <p>Accept-CH)</p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData: A processed <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> instance to get the response header values from. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">flowData</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData A processed <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> instance to get the response header values from. </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{object} A dictionary of response header names with their values if they are not null </dd></dl>
@@ -531,12 +528,9 @@ Public Member Functions</h2>
 <p>Try to get the value for the given element and property. </p>
 <p>If the value cannot be found or is null/unknown, then undefined is returned.</p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData: A processed <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> instance to get the value from. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - elementKey: Key for the element data to get the value from. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - propertyKey: Name of the property to get the value for. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">flowData</span> - </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">elementKey</span> - </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">propertyKey</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData A processed <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> instance to get the value from. </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - elementKey Key for the element data to get the value from. </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - propertyKey Name of the property to get the value for. </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{string | undefined} value string or undefined. </dd></dl>

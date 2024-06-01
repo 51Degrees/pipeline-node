@@ -447,7 +447,7 @@ Public Member Functions</h2>
 
 <p>Add query data to the evidence. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">flowData</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> for logging </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{object}</span> - queryData The destination dictionary to add query data to. </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{Evidence}</span> - allEvidence All evidence in the flow data. This is used to report which evidence keys are conflicting. </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{object}</span> - evidence <a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a> to add to the query Data. </dd>
@@ -502,7 +502,7 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - options.licenseKey licensekey for cloud service </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - options.baseURL url the cloud service is located at if overriding default </dd>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - options.cloudRequestOrigin The value to set for the Origin header when making requests to the cloud service. This is used by the cloud service to check that the request is being made from a origin matching those allowed by the resource key. For more detail, see the 'Request Headers' section in the <a href="https://cloud.51degrees.com/api-docs/index.html">cloud documentation</a>. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">options.requestClient</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{RequestClient}</span> - options.requestClient Set predefined <a class="el" href="class_request_client.html">RequestClient</a>. </dd>
   </dd>
 </dl>
 <!-- endIndent -->
@@ -654,7 +654,7 @@ Public Member Functions</h2>
 <p>Generate the Content to send in the POST request. </p>
 <p>The evidence keys e.g. 'query.' and 'header.' have an order of precedence. These are added to the evidence in reverse order, if there is conflict then the queryData value is overwritten. 'query.' evidence should take precedence over all other evidence. If there are evidence keys other than 'query.' that conflict then this is unexpected so a warning will be logged.</p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> to get evidence from </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{<a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a>} <a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a> Dictionary </dd></dl>
@@ -751,8 +751,7 @@ Public Member Functions</h2>
 <p>Typically, cloud will return errors as JSON. </p>
 <p>However, transport level errors or other failures can result in responses that are plain text. This function handles these cases.</p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - response the response data to process </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">responseBody</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - responseBody the response data to process </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Array} The error messages </dd></dl>
@@ -800,9 +799,10 @@ Public Member Functions</h2>
 
 <p>Used to handle errors from http requests. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">response</span> - </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{http.ServerResponse}</span> - response Responce to get errors from </dd>
   </dd>
 </dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Array&lt;CloudRequestError&gt;} Array of <a class="el" href="class_cloud_request_error.html">CloudRequestError</a> from response </dd></dl>
 <!-- endIndent -->
 
 </div>
@@ -906,6 +906,7 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{stirng}</span> - type Required evidence key prefix </dd>
   </dd>
 </dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{<a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a>} Selected evidence </dd></dl>
 <!-- endIndent -->
 
 </div>
@@ -968,7 +969,7 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - prefix The prefix to check for. </dd>
   </dd>
 </dl>
-<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">True if the key has the prefix. </dd></dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{boolean} True if the key has the prefix. </dd></dl>
 <!-- endIndent -->
 
 </div>
