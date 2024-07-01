@@ -19,9 +19,11 @@ declare class MissingPropertyService {
     check(key: string, flowElement: FlowElement): void;
     /**
      * Return true if the supplied flow element is a CloudEngine, false if not.
+     *
      * @param {FlowElement} flowElement The flow element to check
+     * @returns {boolean} Is CloudEngine
      */
-    _isCloudEngine(flowElement: FlowElement): any;
+    _isCloudEngine(flowElement: FlowElement): boolean;
 }
 declare namespace MissingPropertyService {
     export { FlowElement };

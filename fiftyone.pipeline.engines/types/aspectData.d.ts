@@ -3,6 +3,7 @@ declare const AspectData_base: typeof import("fiftyone.pipeline.core/types/eleme
 /**
  * @typedef {import('fiftyone.pipeline.core').FlowElement} FlowElement
  * @typedef {import('./missingPropertyService')} MissingPropertyService
+ * @typedef {import('fiftyone.pipeline.core').FlowData} FlowData
  */
 /**
  * Extension of elementData which allows for a missing property service
@@ -25,14 +26,11 @@ declare class AspectData extends AspectData_base {
         missingPropertyService: MissingPropertyService;
     }, ...args: any[]);
     missingPropertyService: MissingPropertyServiceBase;
-    /**
-     * @returns {ElementData}
-     */
-    test(): typeof import("fiftyone.pipeline.core/types/elementData");
 }
 declare namespace AspectData {
-    export { FlowElement, MissingPropertyService };
+    export { FlowElement, MissingPropertyService, FlowData };
 }
 import MissingPropertyServiceBase = require("./missingPropertyService");
 type FlowElement = import("fiftyone.pipeline.core/types/flowElement");
 type MissingPropertyService = import('./missingPropertyService');
+type FlowData = import("fiftyone.pipeline.core/types/flowData");

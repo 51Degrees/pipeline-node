@@ -24,9 +24,9 @@ class RequestClient {
   /**
    * Make a POST request to the specified url
    *
-   * @param {*} url The url to send a request to
-   * @param {*} data The data to send in the body of the request
-   * @param {*} origin The value to use for the Origin header when
+   * @param {string} url The url to send a request to
+   * @param {object | null} data The data to send in the body of the request
+   * @param {string | null} origin The value to use for the Origin header when
    * making the request
    * @returns {Promise} The resolve function will be passed the content
    * from the response and the reject function will be passed
@@ -100,8 +100,8 @@ class RequestClient {
   /**
    * Make a GET request to the specified url
    *
-   * @param {*} url The url to send a request to
-   * @param {*} origin The value to use for the Origin header when
+   * @param {string} url The url to send a request to
+   * @param {string | null} origin The value to use for the Origin header when
    * making the request
    * @returns {Promise} The resolve function will be passed the content
    * from the response and the reject function will be passed

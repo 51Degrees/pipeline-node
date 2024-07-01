@@ -33,6 +33,7 @@ const CloudRequestError = require('./cloudRequestError');
 
 /**
  * @typedef {import('fiftyone.pipeline.core').FlowData} FlowData
+ * @typedef {import('fiftyone.pipeline.core').Evidence} Evidence
  */
 
 // Engine that makes a call to the 51Degrees cloud service
@@ -195,7 +196,7 @@ class CloudRequestEngine extends Engine {
   /**
    * Used to handle errors from http requests
    *
-   * @param {http.ServerResponse} response Responce to get errors from
+   * @param {import('http').ServerResponse} response Responce to get errors from
    * @returns {Array<CloudRequestError>} Array of CloudRequestError from response
    */
   getErrorsFromResponse (response) {
@@ -216,7 +217,7 @@ class CloudRequestEngine extends Engine {
     if (cloudErrors.length === 0 &&
       response.statusCode > 299) {
       const message = 'Cloud service returned status code ' +
-          response.statusCode + ' with content ' + content + '.';
+        response.statusCode + ' with content ' + content + '.';
       cloudErrors.push(new CloudRequestError(
         message,
         response.headers,
@@ -229,7 +230,7 @@ class CloudRequestEngine extends Engine {
   /**
    * Internal process to fetch all the properties available under a resourcekey
    *
-   * @returns {Promise} properties from the cloud server
+   * @returns {Promise<object>} properties from the cloud server
    */
   fetchProperties () {
     const engine = this;
@@ -266,6 +267,12 @@ class CloudRequestEngine extends Engine {
     });
   }
 
+  /**
+   * Properties transform
+   *
+   * @param {object} properties properties to transform
+   * @returns {object} transformed properties
+   */
   propertiesTransform (properties) {
     const result = {};
     const self = this;
@@ -285,6 +292,13 @@ class CloudRequestEngine extends Engine {
     return result;
   }
 
+  /**
+   * Meta property transform
+   *
+   * @param {string} key key to check
+   * @param {object} value properties to transform
+   * @returns {object} transformed properties
+   */
   metaPropertyTransform (key, value) {
     switch (key) {
       case 'itemproperties':
@@ -342,7 +356,7 @@ class CloudRequestEngine extends Engine {
   /**
    * Internal function to get evidenceKeys used by cloud resourcekey
    *
-   * @returns {Array} evidence key list
+   * @returns {Promise} evidence promise
    */
   getEvidenceKeys () {
     const engine = this;
@@ -371,7 +385,7 @@ class CloudRequestEngine extends Engine {
    * this is unexpected so a warning will be logged.
    *
    * @param {FlowData} flowData FlowData to get evidence from
-   * @returns {Evidence} Evidence Dictionary
+   * @returns {object} Evidence Dictionary
    */
   getContent (flowData) {
     const queryData = {};
@@ -448,7 +462,7 @@ class CloudRequestEngine extends Engine {
    * Get evidence with specified prefix.
    *
    * @param {Evidence} evidence All evidence in the flow data.
-   * @param {stirng} type Required evidence key prefix
+   * @param {string} type Required evidence key prefix
    * @returns {Evidence} Selected evidence
    */
   getSelectedEvidence (evidence, type) {
@@ -457,8 +471,8 @@ class CloudRequestEngine extends Engine {
     if (type === 'other') {
       for (const [key, value] of Object.entries(evidence)) {
         if (this.hasKeyPrefix(key, 'query') === false &&
-            this.hasKeyPrefix(key, 'header') === false &&
-            this.hasKeyPrefix(key, 'cookie') === false) {
+          this.hasKeyPrefix(key, 'header') === false &&
+          this.hasKeyPrefix(key, 'cookie') === false) {
           selectedEvidence[key] = value;
         }
       }

@@ -10,6 +10,18 @@ export = JSONBundlerElement;
  */
 declare class JSONBundlerElement extends FlowElement {
     constructor(...args: any[]);
+    evidenceKeyFilter: BasicListEvidenceKeyFilter;
     propertyCache: {};
+    /**
+     * The JSON Builder extracts all properties and serializes them into JSON
+     *
+     * @param {FlowData} flowData the FlowData being processed
+     */
+    processInternal(flowData: FlowData): void;
+}
+declare namespace JSONBundlerElement {
+    export { FlowData };
 }
 import FlowElement = require("./flowElement.js");
+import BasicListEvidenceKeyFilter = require("./basicListEvidenceKeyFilter.js");
+type FlowData = import('./flowData');

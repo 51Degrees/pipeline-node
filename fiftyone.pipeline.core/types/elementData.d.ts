@@ -1,6 +1,7 @@
 export = ElementData;
 /**
  * @typedef {import('./flowElement')} FlowElement
+ * @typedef {import('./flowData')} FlowData
  */
 /**
  * Stores information created by a flowElement based on flowData.
@@ -31,9 +32,9 @@ declare class ElementData {
      * (or skipping) the getInternal method
      *
      * @param {string} key the key to retrieve a property value for
-     * @returns {mixed} value
+     * @returns {FlowData} value
      */
-    get(key: string): any;
+    get(key: string): FlowData;
     /**
      * Return string value of property
      *
@@ -45,18 +46,19 @@ declare class ElementData {
      * Return float value of property
      *
      * @param {string} key the key to retreive a property value for
-     * @returns {number} value
+     * @returns {number} float value
      */
     getAsFloat(key: string): number;
     /**
      * Return int value of property
      *
      * @param {string} key the key to retreive a property value for
-     * @returns {number} value
+     * @returns {number} int value
      */
     getAsInteger(key: string): number;
 }
 declare namespace ElementData {
-    export { FlowElement };
+    export { FlowElement, FlowData };
 }
 type FlowElement = import('./flowElement');
+type FlowData = import('./flowData');

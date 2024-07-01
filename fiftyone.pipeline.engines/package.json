@@ -2,7 +2,12 @@
   "name": "fiftyone.pipeline.engines",
   "version": "1.0.21",
   "description": "Shared base functionality for implementing engines for the 51Degrees Pipeline API",
-  "keywords":["51degrees", "pipeline", "data", "service"],
+  "keywords": [
+    "51degrees",
+    "pipeline",
+    "data",
+    "service"
+  ],
   "main": "index.js",
   "types": "types/index.d.ts",
   "directories": {

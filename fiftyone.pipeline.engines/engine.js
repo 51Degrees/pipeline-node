@@ -46,13 +46,18 @@ class Engine extends FlowElement {
    * @param {DataKeyedCache} options.cache instance of a DataKeyedCache
    * @param {Array} options.restrictedProperties specific list
    * of properties to fetch elementData for
+   * @param {DataFileUpdateService} options.dataFileUpdateService Service that registers FlowElements
    */
   constructor (
     {
-      cache, restrictedProperties, dataFile
+      cache, restrictedProperties, dataFile, dataFileUpdateService
     } = {}
   ) {
     super(...arguments);
+
+    if (dataFileUpdateService) {
+      this.dataFileUpdateService = dataFileUpdateService;
+    }
 
     if (dataFile) {
       this.registerDataFile(dataFile);
@@ -99,7 +104,7 @@ class Engine extends FlowElement {
    * and adds it to the cache (if a cache is present)
    *
    * @param {FlowData} flowData FlowData to process
-   * @returns {undefined} result of processing
+   * @returns {Promise} result of processing
    */
   process (flowData) {
     const engine = this;
@@ -139,15 +144,15 @@ class Engine extends FlowElement {
    * @param {DataFile} dataFile the datafile to register
    */
   registerDataFile (dataFile) {
-    this.registrationCallbacks.push(function (pipeline) {
-      // Create datafile update service if not already created
-
-      if (!pipeline.dataFileUpdateService) {
-        pipeline.dataFileUpdateService = new DataFileUpdateService(pipeline);
-      }
-
-      pipeline.dataFileUpdateService.registerDataFile(dataFile);
-    });
+    // Create datafile update service if not already created
+    if (!this.dataFileUpdateService) {
+      this.registrationCallbacks.push((pipeline) => {
+        this.dataFileUpdateService = new DataFileUpdateService(pipeline.eventEmitter);
+        this.dataFileUpdateService.registerDataFile(dataFile);
+      });
+    } else {
+      this.dataFileUpdateService.registerDataFile(dataFile);
+    }
   }
 }
 

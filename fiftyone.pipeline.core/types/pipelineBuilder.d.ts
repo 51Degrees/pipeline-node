@@ -1,6 +1,8 @@
+/// <reference types="node" />
 export = PipelineBuilder;
 /**
  * @typedef {import('./flowElement')} FlowElement
+ * @typedef {import('events').EventEmitter} EventEmitter
  */
 /**
  * A PipelineBuilder generates a Pipeline object
@@ -22,14 +24,16 @@ declare class PipelineBuilder {
      * @param {boolean} settings.useSetHeaderProperties Whether to
      * automatically add the SetHeadersElement needed to request additional
      * HTTP headers from the client side. This is true by default.
-     * @param {typeof import('./javascriptbuilder').prototype.settings}
-     * settings.javascriptBuilderSettings The settings
-     * to pass to the JavaScriptBuilder. See JavaScriptBuilder class for details.
+     * @param {typeof import('./javascriptbuilder').prototype.settings} settings.javascriptBuilderSettings
+     * The settings to pass to the JavaScriptBuilder.
+     * See JavaScriptBuilder class for details.
+     * @param {EventEmitter} settings.eventEmitter A logger for emitting messages for pipeline
      */
     constructor(settings?: {
         addJavaScriptBuilder: boolean;
         useSetHeaderProperties: boolean;
         javascriptBuilderSettings: typeof import('./javascriptbuilder').prototype.settings;
+        eventEmitter: EventEmitter;
     });
     /**
      * @type {FlowElement[]}
@@ -45,6 +49,7 @@ declare class PipelineBuilder {
         minify: boolean;
     };
     useSetHeaderProperties: boolean;
+    eventEmitter: import("events");
     /**
      * Helper that loads a JSON configuration file from
      * the filesystem and calls pipelineBuilder.buildFromConfiguration
@@ -60,6 +65,13 @@ declare class PipelineBuilder {
      * @returns {Pipeline} the constructed pipeline
      */
     buildFromConfiguration(config: object): Pipeline;
+    /**
+     * Add required elements to an existing FlowElement array
+     *
+     * @param {FlowElement[]} flowElements array of elements to add to
+     * @returns {FlowElement[]} resulting array with required elements
+     */
+    addRequiredElements(flowElements: FlowElement[]): FlowElement[];
     /**
      * Internal function used to first check if the
      * JavaScript elements should be added to the pipeline
@@ -102,7 +114,8 @@ declare class PipelineBuilder {
     build(): Pipeline;
 }
 declare namespace PipelineBuilder {
-    export { FlowElement };
+    export { FlowElement, EventEmitter };
 }
 type FlowElement = import('./flowElement');
 import Pipeline = require("./pipeline");
+type EventEmitter = import('events').EventEmitter;

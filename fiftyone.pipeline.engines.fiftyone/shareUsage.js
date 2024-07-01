@@ -40,6 +40,7 @@ const SHARE_USAGE_VERSION = '1.1';
 
 /**
  * @typedef {import('fiftyone.pipeline.core').FlowData} FlowData
+ * @typedef {import('fiftyone.pipeline.core').FlowElement} FlowElement
  */
 
 /**
@@ -317,6 +318,10 @@ class ShareUsage extends Engine {
    */
   getFlowElements () {
     if (!this.flowElements) {
+      /**
+       * @type {Array<FlowElement>}
+       */
+      this.flowElements = [];
       if (this.pipelines.length === 1) {
         const list = [];
         for (const [, value] of Object.entries(this.pipelines[0].flowElements)) {
@@ -330,9 +335,8 @@ class ShareUsage extends Engine {
         // make up the pipeline so a warning is logged
         // but otherwise, the system can continue as normal.
         this._log('warn', 'Share usage element registered ' +
-                    `to ${this.pipelines.length > 0 ? 'too many' : 'no'}` +
-                    ' pipelines. Unable to send share usage information.');
-        this.flowElements = [];
+          `to ${this.pipelines.length > 0 ? 'too many' : 'no'}` +
+          ' pipelines. Unable to send share usage information.');
       }
     }
     return this.flowElements;
@@ -402,6 +406,12 @@ class ShareUsageData {
     this.sequence = '';
   }
 
+  /**
+   * Try to add data to shared usage
+   *
+   * @param {string} key key to add by
+   * @param {*} value value to add
+   */
   tryAddToData (key, value) {
     // Get the category and field names from the evidence key.
     let category = '';

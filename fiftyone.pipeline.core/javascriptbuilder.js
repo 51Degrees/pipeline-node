@@ -37,6 +37,10 @@ const Constants = require('./constants.js');
 const uglifyJS = require('uglify-js');
 
 /**
+ * @typedef {import('./flowData')} FlowData
+ */
+
+/**
  * An instance of EvidenceKeyFilter which removes all but header
  * and query evidence as that is all that is used by
  * the JavaScript builder

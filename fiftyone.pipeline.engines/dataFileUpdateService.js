@@ -33,7 +33,6 @@ const AutoUpdateStatus = require('./autoUpdateStatus');
 const minToMs = (min) => min * 60000;
 
 /**
- * @typedef {import('fiftyone.pipeline.core').Pipeline} Pipeline
  * @typedef {import('./dataFile')} DataFile
  */
 
@@ -46,22 +45,41 @@ class DataFileUpdateService {
   /**
    * Constructor for a DataFileUpdateService
    *
-   * @param {Pipeline} pipeline
-   * pipeline the update service is attached to
+   * @param {EventEmitter=} pipelineEmitter
+   * pipelineEmitter the update service is attached to
    **/
-  constructor (pipeline) {
-    this.registerPipeline(pipeline);
+  constructor (pipelineEmitter) {
+    if (pipelineEmitter) {
+      this.registerPipelineEmmiter(pipelineEmitter);
+    }
     this.eventEmitter = new EventEmitter();
   }
 
-  registerPipeline (pipeline) {
-    this.pipeline = pipeline;
+  /**
+   * Register emmiter to get human readable statuses
+   *
+   * @param {EventEmitter} pipelineEmitter event emiiter for human readable statuses
+   */
+  registerPipelineEmmiter (pipelineEmitter) {
+    this.pipelineEmitter = pipelineEmitter;
   }
 
+  /**
+   * EventEmitter's 'on' delegation
+   *
+   * @param {string | symbol}  listener listener
+   * @param {Function} callback callback
+   */
   on (listener, callback) {
     this.eventEmitter.on(listener, callback);
   }
 
+  /**
+   * EventEmitter's 'once' delegation
+   *
+   * @param {string | symbol} listener listener
+   * @param {Function} callback callback
+   */
   once (listener, callback) {
     this.eventEmitter.once(listener, callback);
   }
@@ -70,7 +88,8 @@ class DataFileUpdateService {
    * Method that updates a datafile when it is due an update
    *
    * @param {DataFile} dataFile the datafile to update
-   * @returns {undefined}
+   * @returns {boolean} returns false if already updating
+   * or request failed
    */
   updateDataFile (dataFile) {
     const dataFileUpdateService = this;
@@ -112,7 +131,7 @@ class DataFileUpdateService {
 
         switch (response.statusCode) {
           case (429):
-            dataFileUpdateService.pipeline.log(
+            dataFileUpdateService.pipelineEmitter.emit(
               'error',
               "Too many requests to '" + dataFile.updateUrl +
               "' for engine '" +
@@ -123,7 +142,7 @@ class DataFileUpdateService {
               dataFile);
             break;
           case (304):
-            dataFileUpdateService.pipeline.log(
+            dataFileUpdateService.pipelineEmitter.emit(
               'warn',
               'No data update available from ' +
               dataFile.updateUrl +
@@ -135,7 +154,7 @@ class DataFileUpdateService {
               dataFile);
             break;
           case (403):
-            dataFileUpdateService.pipeline.log('error',
+            dataFileUpdateService.pipelineEmitter.emit('error',
               'Access denied from ' +
               dataFile.updateUrl +
               "' for engine '" +
@@ -146,7 +165,7 @@ class DataFileUpdateService {
               dataFile);
             break;
           default:
-            dataFileUpdateService.pipeline.log(
+            dataFileUpdateService.pipelineEmitter.emit(
               'error',
               'Error' + response.statusCode +
               ' from ' +
@@ -183,7 +202,7 @@ class DataFileUpdateService {
           fd.on('end', function () {
             hash.end();
             if (hash.read() !== headerMD5) {
-              dataFileUpdateService.pipeline.log(
+              dataFileUpdateService.pipelineEmitter.emit(
                 'error',
                 "MD5 doesn't match from '" +
                 dataFile.updateUrl +
@@ -216,14 +235,13 @@ class DataFileUpdateService {
    *
    * @param {DataFile} dataFile the datafile that is ready
    * @param {string} filename the filename of the updated datafile
-   * @returns {undefined}
    */
   fileReady (dataFile, filename) {
     const dataFileUpdateService = this;
 
     fs.readFile(filename, function (err, data) {
       if (err) {
-        dataFileUpdateService.pipeline.log('error', err);
+        dataFileUpdateService.pipelineEmitter.emit('error', err);
         dataFileUpdateService.eventEmitter.emit(
           'updateComplete',
           AutoUpdateStatus.AUTO_UPDATE_MASTER_FILE_CANT_RENAME,
@@ -232,7 +250,7 @@ class DataFileUpdateService {
 
       fs.writeFile(dataFile.path, data, function (err) {
         if (err) {
-          dataFileUpdateService.pipeline.log('error', err);
+          dataFileUpdateService.pipelineEmitter.emit('error', err);
           dataFileUpdateService.eventEmitter.emit(
             'updateComplete',
             AutoUpdateStatus.AUTO_UPDATE_NEW_FILE_CANT_RENAME,
@@ -242,7 +260,7 @@ class DataFileUpdateService {
         try {
           dataFile.refresh();
         } catch (e) {
-          dataFileUpdateService.pipeline.log('error', e);
+          dataFileUpdateService.pipelineEmitter.emit('error', e);
           dataFileUpdateService.eventEmitter.emit(
             'updateComplete',
             AutoUpdateStatus.AUTO_UPDATE_REFRESH_FAILED,
@@ -254,7 +272,7 @@ class DataFileUpdateService {
         // Delete the temp file
         fs.unlink(filename, function (err) {
           if (err) {
-            dataFileUpdateService.pipeline.log('error', err);
+            dataFileUpdateService.pipelineEmitter.emit('error', err);
             dataFileUpdateService.eventEmitter.emit(
               'updateComplete',
               AutoUpdateStatus.AUTO_UPDATE_NEW_FILE_CANT_RENAME,
@@ -282,7 +300,7 @@ class DataFileUpdateService {
     if (dataFile.decompress) {
       fs.readFile(filename, function (err, buffer) {
         if (err) {
-          dataFileUpdateService.pipeline.log('error', err);
+          dataFileUpdateService.pipelineEmitter.emit('error', err);
           dataFileUpdateService.eventEmitter.emit(
             'updateComplete',
             AutoUpdateStatus.AUTO_UPDATE_ERR_READING_STREAM,
@@ -291,7 +309,7 @@ class DataFileUpdateService {
 
         zlib.gunzip(buffer, function (err, data) {
           if (err) {
-            dataFileUpdateService.pipeline.log('error', err);
+            dataFileUpdateService.pipelineEmitter.emit('error', err);
             dataFileUpdateService.eventEmitter.emit(
               'updateComplete',
               AutoUpdateStatus.AUTO_UPDATE_ERR_READING_STREAM,
@@ -303,7 +321,7 @@ class DataFileUpdateService {
           fs.writeFile(doneFileName, data, function () {
             dataFileUpdateService.fileReady(dataFile, doneFileName);
             fs.unlink(filename, function (err) {
-              if (err) dataFileUpdateService.pipeline.log('error', err);
+              if (err) dataFileUpdateService.pipelineEmitter.emit('error', err);
             });
           });
         });
@@ -344,7 +362,7 @@ class DataFileUpdateService {
       }
     } catch (e) {
       // Catch any extra errors with datafile updates
-      this.pipeline.log('error', e);
+      this.pipelineEmitter.emit('error', e);
     }
   }
 

@@ -4,6 +4,7 @@
   "description": "Cloud request engine for the 51Degrees Pipeline API",
   "keywords": ["51degrees", "pipeline", "data", "service", "cloud"],
   "main": "index.js",
+  "types": "types/index.d.ts",
   "directories": {
     "test": "tests"
   },

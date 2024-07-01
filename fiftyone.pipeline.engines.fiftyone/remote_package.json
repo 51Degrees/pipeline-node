@@ -4,6 +4,7 @@
   "description": "Shared base functions for implementing 51Degrees engines for the 51Degrees Pipeline API",
   "keywords":["51degrees", "pipeline", "data", "service"],
   "main": "index.js",
+  "types": "types/index.d.ts",
   "directories": {
     "test": "tests"
   },

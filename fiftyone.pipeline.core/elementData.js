@@ -25,6 +25,7 @@ const errorMessages = require('./errorMessages');
 
 /**
  * @typedef {import('./flowElement')} FlowElement
+ * @typedef {import('./flowData')} FlowData
  */
 
 /**
@@ -88,7 +89,7 @@ class ElementData {
    * (or skipping) the getInternal method
    *
    * @param {string} key the key to retrieve a property value for
-   * @returns {mixed} value
+   * @returns {FlowData} value
    */
   get (key) {
     const value = this.getInternal(key);
@@ -121,7 +122,7 @@ class ElementData {
    * Return float value of property
    *
    * @param {string} key the key to retreive a property value for
-   * @returns {number} value
+   * @returns {number} float value
    */
   getAsFloat (key) {
     const result = this.get(key);
@@ -135,7 +136,7 @@ class ElementData {
    * Return int value of property
    *
    * @param {string} key the key to retreive a property value for
-   * @returns {number} value
+   * @returns {number} int value
    */
   getAsInteger (key) {
     const result = this.get(key);

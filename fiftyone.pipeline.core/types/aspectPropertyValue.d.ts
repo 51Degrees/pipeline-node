@@ -9,7 +9,7 @@ declare class AspectPropertyValue {
      * Constructor for AspectPropertyValue
      *
      * @param {string} noValueMessage The message to show when no value is set
-     * @param {Mixed} value The value inside the wrapper
+     * @param {*} value The value inside the wrapper
      */
     constructor(noValueMessage: string, value: any);
     noValueMessage: string;
@@ -18,13 +18,13 @@ declare class AspectPropertyValue {
     /**
      * Set the value of this instance.
      *
-     * @param {Mixed} value the value to set
+     * @param {*} value the value to set
      */
-    set value(arg: any);
+    set value(value: any);
     /**
      * Get the value of this instance.
      *
-     * @returns {Mixed} The value of the property
+     * @returns {*} The value of the property
      * @throws Will throw error if 'hasValue' is false.
      */
     get value(): any;

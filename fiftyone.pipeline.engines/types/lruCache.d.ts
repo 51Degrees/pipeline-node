@@ -13,6 +13,8 @@ declare class LRUcache extends DataKeyedCache {
         size: number;
     }, ...args: any[]);
     cache: LRU;
+    get(cacheKey: any): any;
+    put(cacheKey: any, value: any): void;
 }
 import DataKeyedCache = require("./dataKeyedCache");
 import LRU = require("./lru");

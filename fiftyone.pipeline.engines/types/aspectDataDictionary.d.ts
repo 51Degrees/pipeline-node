@@ -25,6 +25,14 @@ declare class AspectDataDictionary extends AspectData {
         contents: object;
     }, ...args: any[]);
     contents: object;
+    /**
+     * getInternal retrieves a value from the dictionary
+     *
+     * @param {string} key property key
+     * @returns {*} property value
+     */
+    getInternal(key: string): any;
+    [Symbol.iterator](): Generator<string, void, unknown>;
 }
 declare namespace AspectDataDictionary {
     export { FlowElement, MissingPropertyService };

@@ -28,6 +28,13 @@ const AspectPropertyValue = core.AspectPropertyValue;
 const BasicListEvidenceKeyFilter = core.BasicListEvidenceKeyFilter;
 
 /**
+ * @typedef {import('fiftyone.pipeline.core').Pipeline} Pipeline
+ * @typedef {import('fiftyone.pipeline.core').FlowElement} FlowElement
+ * @typedef {import('fiftyone.pipeline.core').FlowData} FlowData
+ * @typedef {import('./cloudRequestEngine')} CloudRequestEngine
+ */
+
+/**
  * This is a template for all 51Degrees cloud engines.
  * It requires the 51Degrees cloudRequestEngine to be placed in a
  *  pipeline before it. It takes that raw JSON response and
@@ -57,7 +64,9 @@ class CloudEngine extends Engine {
     if (!pipeline.flowElements.cloud) {
       pipeline.log('error', 'No CloudRequestEngine in Pipeline');
     }
-
+    /**
+     * @type {CloudRequestEngine}
+     */
     this._cloudRequestEngine = pipeline.flowElements.cloud;
     this._flowElement = flowElement;
   }
@@ -112,12 +121,12 @@ class CloudEngine extends Engine {
 
       if (cloudData && cloudData[engine.dataKey] === null) {
         flowData.pipeline.log('error', engine.dataKey + ' not populated. ' +
-        cloudData[engine.dataKey + 'nullreason'] !== null
+          cloudData[engine.dataKey + 'nullreason'] !== null
           ? cloudData[engine.dataKey + 'nullreason']
           : '' +
-        '\n' + 'This may be because the provided API key is not authorised for ' + engine.dataKey + ' queries.');
+          '\n' + 'This may be because the provided API key is not authorised for ' + engine.dataKey + ' queries.');
       } else {
-      // Loop over cloudData.device properties to check if they have a value
+        // Loop over cloudData.device properties to check if they have a value
         Object.entries(cloudData[engine.dataKey]).forEach(function ([key, value]) {
           result[key] = new AspectPropertyValue();
 

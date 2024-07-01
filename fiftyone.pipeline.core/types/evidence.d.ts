@@ -18,7 +18,7 @@ declare class Evidence {
      * Add a piece of evidence to flowData
      *
      * @param {string} key evidence key to add
-     * @param {Mixed} value value of evidence key
+     * @param {*} value value of evidence key
      */
     add(key: string, value: any): void;
     /**
@@ -26,7 +26,7 @@ declare class Evidence {
      *
      * @param {object} evidenceObject key value map of evidence
      * @param {string} evidenceObject.key evidencekey
-     * @param {Mixed} evidenceObject.value evidence value
+     * @param {*} evidenceObject.value evidence value
      */
     addObject(evidenceObject: {
         key: string;
@@ -38,14 +38,14 @@ declare class Evidence {
      * headers, cookies, protocol, IP and query params
      *
      * @param {object} request an HTTP request object
-     * @returns {undefined}
+     * @returns {Evidence} return updated evidence
      */
-    addFromRequest(request: object): undefined;
+    addFromRequest(request: object): Evidence;
     /**
      * Get a piece of evidence
      *
      * @param {string} key evidence key to retreive
-     * @returns {mixed} the evidence value
+     * @returns {*} the evidence value
      */
     get(key: string): any;
     /**

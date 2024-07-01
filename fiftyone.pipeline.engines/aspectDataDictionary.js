@@ -59,7 +59,7 @@ class AspectDataDictionary extends AspectData {
    * getInternal retrieves a value from the dictionary
    *
    * @param {string} key property key
-   * @returns {Mixed} property value
+   * @returns {*} property value
    */
   getInternal (key) {
     return this.contents[key];

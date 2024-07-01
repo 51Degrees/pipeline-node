@@ -26,7 +26,10 @@ declare class JavaScriptBuilderElement extends FlowElement {
      * callback url. This can be overriden with header.host evidence.
      * @param {string} options.endPoint The endpoint of the client side
      * callback url
-     * @param {boolean} options.enableCookies whether cookies should be enabled
+     * @param {boolean} options.enableCookies Whether the client JavaScript
+     * stored results of client side processing in cookies. This can also
+     * be set per request, using the "query.fod-js-enable-cookies" evidence key.
+     * For more details on personal data policy, see http://51degrees.com/terms/client-services-privacy-policy/
      * @param {boolean} options.minify Whether to minify the JavaScript
      */
     constructor({ objName, protocol, host, endPoint, enableCookies, minify }?: {
@@ -45,5 +48,31 @@ declare class JavaScriptBuilderElement extends FlowElement {
         enableCookies: boolean;
         minify: boolean;
     };
+    evidenceKeyFilter: JSEvidenceKeyFilter;
+    /**
+     * Internal process function of the JavaScript builder
+     * Gets JSON from the JSONBundler and constructs JavaScript
+     * to place on the client side
+     *
+     * @param {FlowData} flowData to process
+     * @returns {undefined}
+     */
+    processInternal(flowData: FlowData): undefined;
+}
+declare namespace JavaScriptBuilderElement {
+    export { FlowData };
 }
 import FlowElement = require("./flowElement.js");
+/**
+ * @typedef {import('./flowData')} FlowData
+ */
+/**
+ * An instance of EvidenceKeyFilter which removes all but header
+ * and query evidence as that is all that is used by
+ * the JavaScript builder
+ **/
+declare class JSEvidenceKeyFilter extends EvidenceKeyFilter {
+    filterEvidenceKey(key: any): boolean;
+}
+type FlowData = import('./flowData');
+import EvidenceKeyFilter = require("./evidenceKeyFilter.js");

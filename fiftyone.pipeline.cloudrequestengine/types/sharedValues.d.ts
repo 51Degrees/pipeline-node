@@ -1,1 +1,1 @@
-export const baseURLDefault: string;
+export let baseURLDefault: string;

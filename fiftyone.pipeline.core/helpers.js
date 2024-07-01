@@ -20,11 +20,15 @@
  * such notice(s) shall fulfill the requirements of that article.
  * ********************************************************************* */
 
+/**
+ * @typedef {import('./flowData')} FlowData
+ */
+
 class Helpers {
   /**
    * Set response headers in the response object (e.g. Accept-CH)
    *
-   * @param {http.ServerResponse} response The response to set the headers in.
+   * @param {import('http').ServerResponse} response The response to set the headers in.
    * @param {FlowData} flowData A processed FlowData instance to get the response header values
    * from.
    */

@@ -13,12 +13,22 @@ declare class Pipeline {
      *
      * @param {FlowElement[]} flowElements list of FlowElements to
      * add to the Pipeline
+     * @param {number} suppressProcessExceptions If true then pipeline
+     * will suppress exceptions added to FlowData.
+     * @param {EventEmitter} eventEmitter A logger for emitting messages
      */
-    constructor(flowElements?: FlowElement[]);
+    constructor(flowElements?: FlowElement[], suppressProcessExceptions?: number, eventEmitter?: EventEmitter);
     flowElementsChain: import("./flowElement")[];
+    suppressProcessExceptions: number;
     eventEmitter: EventEmitter;
-    flowElements: {};
-    propertyDatabase: {};
+    /**
+     * @type {object}
+     */
+    flowElements: object;
+    /**
+     * @type {object}
+     */
+    propertyDatabase: object;
     processMethod: (flowData: any) => any;
     /**
      * get a FlowElement by its dataKey
@@ -39,7 +49,7 @@ declare class Pipeline {
      * Shorthand to trigger a message on the pipeline's eventEmitter
      *
      * @param {string} type type of message
-     * @param {mixed} message message to store in the log
+     * @param {*} message message to store in the log
      */
     log(type: string, message: any): void;
     /**
@@ -51,8 +61,9 @@ declare class Pipeline {
      */
     createFlowData(): FlowData;
     /**
+     *  Update pipeline's property database for FlowElement
      *
-     * @param {FlowElement} flowElement
+     * @param {FlowElement} flowElement FlowElement to update
      * @returns {void}
      */
     updatePropertyDataBaseForElement(flowElement: FlowElement): void;
@@ -61,5 +72,5 @@ declare namespace Pipeline {
     export { FlowElement };
 }
 import EventEmitter = require("events");
-type FlowElement = import('./flowElement');
 import FlowData = require("./flowData");
+type FlowElement = import('./flowElement');

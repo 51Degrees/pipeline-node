@@ -21,12 +21,15 @@ declare class Engine extends Engine_base {
      * @param {DataKeyedCache} options.cache instance of a DataKeyedCache
      * @param {Array} options.restrictedProperties specific list
      * of properties to fetch elementData for
+     * @param {DataFileUpdateService} options.dataFileUpdateService Service that registers FlowElements
      */
-    constructor({ cache, restrictedProperties, dataFile }?: {
+    constructor({ cache, restrictedProperties, dataFile, dataFileUpdateService }?: {
         dataFile: DataFile;
         cache: DataKeyedCache;
         restrictedProperties: any[];
+        dataFileUpdateService: DataFileUpdateService;
     }, ...args: any[]);
+    dataFileUpdateService: DataFileUpdateService;
     cache: import("./dataKeyedCache");
     restrictedProperties: any[];
     /**
@@ -55,6 +58,7 @@ declare class Engine extends Engine_base {
 declare namespace Engine {
     export { DataFile, DataKeyedCache, FlowData };
 }
-type FlowData = import("fiftyone.pipeline.core/types/flowData");
+import DataFileUpdateService = require("./dataFileUpdateService");
 type DataFile = import('./dataFile');
 type DataKeyedCache = import('./dataKeyedCache');
+type FlowData = import("fiftyone.pipeline.core/types/flowData");

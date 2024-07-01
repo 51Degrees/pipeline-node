@@ -25,7 +25,6 @@ const EventEmitter = require('events');
 
 /**
  * @typedef {import('./flowElement')} FlowElement
- * @typedef {import('../fiftyone.pipeline.engines/dataFileUpdateService')} DataFileUpdateService
  */
 
 /**
@@ -39,11 +38,11 @@ class Pipeline {
    *
    * @param {FlowElement[]} flowElements list of FlowElements to
    * add to the Pipeline
-   * @param {boolean} suppressProcessExceptions If true then pipeline
+   * @param {number} suppressProcessExceptions If true then pipeline
    * will suppress exceptions added to FlowData.
-   * @param {DataFileUpdateService} dataFileUpdateService Service that registers FlowElements
+   * @param {EventEmitter} eventEmitter A logger for emitting messages
    */
-  constructor (flowElements = [], suppressProcessExceptions = false, dataFileUpdateService = null) {
+  constructor (flowElements = [], suppressProcessExceptions = false, eventEmitter = null) {
     const pipeline = this;
 
     // The chain of flowElements to run, including arrays of parallel elements
@@ -53,15 +52,17 @@ class Pipeline {
     this.suppressProcessExceptions = suppressProcessExceptions;
 
     // A logger for emitting messages
-    this.eventEmitter = new EventEmitter();
+    if (eventEmitter) {
+      this.eventEmitter = eventEmitter;
+    } else {
+      this.eventEmitter = new EventEmitter();
+    }
 
     // Flattened dictionary of flowElements the pipeline contains
+    /**
+     * @type {object}
+     */
     this.flowElements = {};
-
-    if (dataFileUpdateService) {
-      this.dataFileUpdateService = dataFileUpdateService;
-      this.dataFileUpdateService.registerPipeline(this);
-    }
 
     // Run through flowElements and store them by dataKey
     // in the pipeline.flowElements object.
@@ -87,6 +88,9 @@ class Pipeline {
 
     // Empty property database, later populated and possibly
     // updated by flowElements' property lists
+    /**
+     * @type {object}
+     */
     this.propertyDatabase = {};
 
     // Update property list - Note that some of these could be async
@@ -201,7 +205,7 @@ class Pipeline {
    * Shorthand to trigger a message on the pipeline's eventEmitter
    *
    * @param {string} type type of message
-   * @param {mixed} message message to store in the log
+   * @param {*} message message to store in the log
    */
   log (type, message) {
     this.eventEmitter.emit(type, message);

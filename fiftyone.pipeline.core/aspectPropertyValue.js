@@ -30,7 +30,7 @@ class AspectPropertyValue {
    * Constructor for AspectPropertyValue
    *
    * @param {string} noValueMessage The message to show when no value is set
-   * @param {Mixed} value The value inside the wrapper
+   * @param {*} value The value inside the wrapper
    */
   constructor (noValueMessage = 'No value has been set.', value) {
     if (typeof value !== 'undefined') {
@@ -46,7 +46,7 @@ class AspectPropertyValue {
   /**
    * Get the value of this instance.
    *
-   * @returns {Mixed} The value of the property
+   * @returns {*} The value of the property
    * @throws Will throw error if 'hasValue' is false.
    */
   get value () {
@@ -60,7 +60,7 @@ class AspectPropertyValue {
   /**
    * Set the value of this instance.
    *
-   * @param {Mixed} value the value to set
+   * @param {*} value the value to set
    */
   set value (value) {
     if (typeof value !== 'undefined') {

@@ -26,6 +26,10 @@ const FlowElement = require('./flowElement.js');
 const BasicListEvidenceKeyFilter = require('./basicListEvidenceKeyFilter');
 
 /**
+ * @typedef {import('./flowData')} FlowData
+ */
+
+/**
  * The SequenceElement stores session data regarding requests
  * for client side JavaScript from the JavaScript created by a
  * Pipeline's JavaScriptBuilder

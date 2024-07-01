@@ -9,7 +9,7 @@ declare class Tracker extends DataKeyedCache {
      * The track method calls the dataKeyedCache get method,
      * if it receives a result it sends it onto a match function
      *
-     * @param {mixed} key cache key to run through tracker
+     * @param {*} key cache key to run through tracker
      * @returns {boolean} result of tracking
      */
     track(key: any): boolean;
@@ -19,6 +19,6 @@ declare class Tracker extends DataKeyedCache {
      * @param {object} result of the track function
      * @returns {boolean} whether a match has been made
      */
-    match(result: object): any;
+    match(result: object): boolean;
 }
 import DataKeyedCache = require("./dataKeyedCache");

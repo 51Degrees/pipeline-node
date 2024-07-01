@@ -20,7 +20,8 @@ declare class ShareUsageEvidenceKeyFilter extends ShareUsageEvidenceKeyFilter_ba
         queryWhitelist: any[];
         headerBlacklist: any[];
     }, ...args: any[]);
-    queryWhitelist: any[];
-    headerBlacklist: any[];
+    includedQueryStringParams: any[];
+    blockedHttpHeaders: any[];
     cookie: string;
+    shareAll: boolean;
 }

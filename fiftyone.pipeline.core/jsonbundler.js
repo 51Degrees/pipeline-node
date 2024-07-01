@@ -24,6 +24,10 @@ const FlowElement = require('./flowElement.js');
 const ElementDataDictionary = require('./elementDataDictionary.js');
 const BasicListEvidenceKeyFilter = require('./basicListEvidenceKeyFilter.js');
 
+/**
+ * @typedef {import('./flowData')} FlowData
+ */
+
 const elementBlacklist = ['jsonbundler', 'javascriptbuilder', 'sequence', 'set-headers'];
 
 /**

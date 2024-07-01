@@ -28,6 +28,7 @@ const MissingPropertyServiceBase = require('./missingPropertyService');
 /**
  * @typedef {import('fiftyone.pipeline.core').FlowElement} FlowElement
  * @typedef {import('./missingPropertyService')} MissingPropertyService
+ * @typedef {import('fiftyone.pipeline.core').FlowData} FlowData
  */
 
 /**
@@ -67,7 +68,7 @@ class AspectData extends ElementData {
    * into the flowElement/engine.
    *
    * @param {string} key the property key to lookup
-   * @returns {mixed} result
+   * @returns {FlowData} result
    */
   get (key) {
     let result;

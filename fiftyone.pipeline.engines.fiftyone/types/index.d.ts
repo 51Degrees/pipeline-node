@@ -1,1 +1,1 @@
-export const ShareUsage: typeof import("./shareUsage");
+export let ShareUsage: typeof import("./shareUsage");

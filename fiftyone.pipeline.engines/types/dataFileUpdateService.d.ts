@@ -1,6 +1,5 @@
 export = DataFileUpdateService;
 /**
- * @typedef {import('fiftyone.pipeline.core').Pipeline} Pipeline
  * @typedef {import('./dataFile')} DataFile
  */
 /**
@@ -12,27 +11,48 @@ declare class DataFileUpdateService {
     /**
      * Constructor for a DataFileUpdateService
      *
-     * @param {Pipeline} pipeline
-     * pipeline the update service is attached to
+     * @param {EventEmitter=} pipelineEmitter
+     * pipelineEmitter the update service is attached to
      **/
-    constructor(pipeline: Pipeline);
-    pipeline: import("fiftyone.pipeline.core/types/pipeline");
+    constructor(pipelineEmitter?: EventEmitter | undefined);
+    eventEmitter: EventEmitter;
+    /**
+     * Register emmiter to get human readable statuses
+     *
+     * @param {EventEmitter} pipelineEmitter event emiiter for human readable statuses
+     */
+    registerPipelineEmmiter(pipelineEmitter: EventEmitter): void;
+    pipelineEmitter: EventEmitter;
+    /**
+     * EventEmitter's 'on' delegation
+     *
+     * @param {string | symbol}  listener listener
+     * @param {Function} callback callback
+     */
+    on(listener: string | symbol, callback: Function): void;
+    /**
+     * EventEmitter's 'once' delegation
+     *
+     * @param {string | symbol} listener listener
+     * @param {Function} callback callback
+     */
+    once(listener: string | symbol, callback: Function): void;
     /**
      * Method that updates a datafile when it is due an update
      *
      * @param {DataFile} dataFile the datafile to update
-     * @returns {undefined}
+     * @returns {boolean} returns false if already updating
+     * or request failed
      */
-    updateDataFile(dataFile: DataFile): undefined;
+    updateDataFile(dataFile: DataFile): boolean;
     /**
      * Internal method called when the datafile has
      * been downloaded and is ready after an update
      *
      * @param {DataFile} dataFile the datafile that is ready
      * @param {string} filename the filename of the updated datafile
-     * @returns {undefined}
      */
-    fileReady(dataFile: DataFile, filename: string): undefined;
+    fileReady(dataFile: DataFile, filename: string): void;
     /**
      * Internal method to process the datafile has been downloaded
      * Including unzipping if needed
@@ -56,7 +76,7 @@ declare class DataFileUpdateService {
     registerDataFile(dataFile: DataFile): void;
 }
 declare namespace DataFileUpdateService {
-    export { Pipeline, DataFile };
+    export { DataFile };
 }
+import EventEmitter = require("events");
 type DataFile = import('./dataFile');
-type Pipeline = import("fiftyone.pipeline.core/types/pipeline");

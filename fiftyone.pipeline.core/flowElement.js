@@ -25,6 +25,7 @@ const EvidenceKeyFilterBase = require('./evidenceKeyFilter');
 /**
  * @typedef {import('./flowData')} FlowData
  * @typedef {import('./pipeline')} Pipeline
+ * @typedef {import('./evidenceKeyFilter')} EvidenceKeyFilter
  */
 
 /**
@@ -66,9 +67,15 @@ class FlowElement {
       this.evidenceKeyFilter = new EvidenceKeyFilterBase();
     }
 
+    /**
+     * @type {Function[]}
+     */
     this.registrationCallbacks = [];
 
     // List of pipelines the flowElement has been added to
+    /**
+     * @type {Pipeline[]}
+     */
     this.pipelines = [];
   }
 
@@ -102,7 +109,7 @@ class FlowElement {
    * by a pipleline is processsed. Overriden by instances of this base class
    *
    * @param {FlowData} flowData FlowData being processed
-   * @returns {Mixed} result of processing
+   * @returns {*} result of processing
    */
   processInternal (flowData) {
     return true;
@@ -149,6 +156,12 @@ class FlowElement {
     return this.properties;
   }
 
+  /**
+   * Internal log
+   *
+   * @param {string} type log type
+   * @param {*} message message to log
+   */
   _log (type, message) {
     if (this.pipelines) {
       this.pipelines.forEach(pipeline => {

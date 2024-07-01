@@ -6,6 +6,7 @@ declare class LRU {
     head: any;
     tail: any;
     cache: {};
+    __convertKey(key: any): any;
     write(key: any, value: any): void;
     read(key: any): any;
     ensureLimit(): void;

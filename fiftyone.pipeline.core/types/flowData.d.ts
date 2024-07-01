@@ -38,7 +38,7 @@ declare class FlowData {
      * Set an error on the flowData (usually triggered by
      * something going wrong in a flowElement's process function)
      *
-     * @param {mixed} error the error to throw
+     * @param {*} error the error to throw
      * @param {FlowElement} flowElement the FlowElement the error is thrown on
      */
     setError(error: any, flowElement: FlowElement): void;
@@ -86,6 +86,6 @@ declare namespace FlowData {
     export { Pipeline, FlowElement, ElementData };
 }
 import Evidence = require("./evidence");
+type Pipeline = import('./pipeline');
 type FlowElement = import('./flowElement');
 type ElementData = import('./elementData');
-type Pipeline = import('./pipeline');

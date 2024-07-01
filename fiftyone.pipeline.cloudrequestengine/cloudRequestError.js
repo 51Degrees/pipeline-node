@@ -21,6 +21,13 @@
  * ********************************************************************* */
 
 class CloudRequestError extends Error {
+  /**
+   * Constructor for Cloud Request Error
+   *
+   * @param {string} message error message
+   * @param {*} responseHeaders response headers
+   * @param {number} httpStatusCode http status code
+   */
   constructor (message, responseHeaders, httpStatusCode) {
     super(message);
     this.name = this.constructor.name;

@@ -2,6 +2,7 @@ export = FlowElement;
 /**
  * @typedef {import('./flowData')} FlowData
  * @typedef {import('./pipeline')} Pipeline
+ * @typedef {import('./evidenceKeyFilter')} EvidenceKeyFilter
  */
 /**
  * A FlowElement is placed inside a pipeline
@@ -26,7 +27,7 @@ declare class FlowElement {
         dataKey: string;
         processInternal: Function;
         properties: object;
-        evidenceKeyFilter: any;
+        evidenceKeyFilter: EvidenceKeyFilter;
     });
     dataKey: string;
     /**
@@ -35,13 +36,19 @@ declare class FlowElement {
      * by a pipleline is processsed. Overriden by instances of this base class
      *
      * @param {FlowData} flowData FlowData being processed
-     * @returns {Mixed} result of processing
+     * @returns {*} result of processing
      */
     processInternal(flowData: FlowData): any;
     properties: object;
-    evidenceKeyFilter: any;
-    registrationCallbacks: any[];
-    pipelines: any[];
+    evidenceKeyFilter: EvidenceKeyFilterBase;
+    /**
+     * @type {Function[]}
+     */
+    registrationCallbacks: Function[];
+    /**
+     * @type {Pipeline[]}
+     */
+    pipelines: Pipeline[];
     /**
      * Internal function to be called when a FlowElement is added
      * to pipeline, runs through any registrationCallbacks on the FlowElement
@@ -54,7 +61,8 @@ declare class FlowElement {
     /**
      * Function called to check if a FlowElement is ready
      * Used when there are asynchronous initialisation steps
-     * @returns {Promise}
+     *
+     * @returns {Promise} returns Promise
      * */
     ready(): Promise<any>;
     /**
@@ -81,9 +89,18 @@ declare class FlowElement {
      * @returns {object} dictionary of properties
      */
     getProperties(): object;
+    /**
+     * Internal log
+     *
+     * @param {string} type log type
+     * @param {*} message message to log
+     */
+    _log(type: string, message: any): void;
 }
 declare namespace FlowElement {
-    export { FlowData, Pipeline };
+    export { FlowData, Pipeline, EvidenceKeyFilter };
 }
-type FlowData = import('./flowData');
+import EvidenceKeyFilterBase = require("./evidenceKeyFilter");
 type Pipeline = import('./pipeline');
+type FlowData = import('./flowData');
+type EvidenceKeyFilter = import('./evidenceKeyFilter');

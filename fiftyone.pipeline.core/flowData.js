@@ -126,7 +126,7 @@ class FlowData {
    * Set an error on the flowData (usually triggered by
    * something going wrong in a flowElement's process function)
    *
-   * @param {mixed} error the error to throw
+   * @param {*} error the error to throw
    * @param {FlowElement} flowElement the FlowElement the error is thrown on
    */
   setError (error, flowElement) {
