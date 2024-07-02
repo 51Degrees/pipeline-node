@@ -80,32 +80,38 @@ $(document).ready(function(){initNavTree('md__home_runner_work_pipeline-node_pip
 <h2>Contents</h2>
 <p>This repository contains 4 modules:</p>
 <ul>
-<li><b>fiftyone.pipeline.core</b> - Defines the essential components of the <a class="el" href="class_pipeline.html" title="Pipeline holding a list of flowElements for processing, can create flowData that will be passed throu...">Pipeline</a> API such as 'flow elements', 'flow data' and 'evidence'</li>
-<li><b>fiftyone.pipeline.engines</b> - Functionality for a specialized type of flow element called an engine.</li>
-<li><b>fiftyone.pipeline.engines.fiftyone</b> - Functionality specific to 51Degrees engines.</li>
-<li><b>fiftyone.pipeline.cloudrequestengine</b> - An engine used to make requests to the 51Degrees cloud service.</li>
+<li>**fiftyone.pipeline.core** - Defines the essential components of the <a class="el" href="class_pipeline.html" title="Pipeline holding a list of flowElements for processing, can create flowData that will be passed throu...">Pipeline</a> API such as 'flow elements', 'flow data' and 'evidence'</li>
+<li>**fiftyone.pipeline.engines** - Functionality for a specialized type of flow element called an engine.</li>
+<li>**fiftyone.pipeline.engines.fiftyone** - Functionality specific to 51Degrees engines.</li>
+<li>**fiftyone.pipeline.cloudrequestengine** - An engine used to make requests to the 51Degrees cloud service.</li>
 </ul>
 <h2>Installation</h2>
 <p>The modules in this repository are available on the node package manager:</p>
 <div class="c-code__block c-code__block--outline"><div class="c-code__line">npm install fiftyone.pipeline.core</div><div class="c-code__line">npm install fiftyone.pipeline.engines</div><div class="c-code__line">npm install fiftyone.pipeline.engines.fiftyone</div><div class="c-code__line">npm install fiftyone.pipeline.cloudrequestengine</div></div><p>They can also be installed from this repository by running:</p>
-<div class="c-code__block c-code__block--outline"><div class="c-code__line">npm install &lt;path to module&gt;</div></div><h2>Tests</h2>
-<p>Most modules include some automated tests. To run these, make sure jest is installed:</p>
-<div class="c-code__block c-code__block--outline"><div class="c-code__line">npm install jest --global</div></div><p>Then, navigate to the module directory and execute:</p>
-<div class="c-code__block c-code__block--outline"><div class="c-code__line">npm test</div></div><h2>Examples</h2>
+<div class="c-code__block c-code__block--outline"><div class="c-code__line">npm install &lt;path to module&gt;</div></div><h2>Examples</h2>
 <p>There are several examples available that demonstrate how to make use of the <a class="el" href="class_pipeline.html" title="Pipeline holding a list of flowElements for processing, can create flowData that will be passed throu...">Pipeline</a> API in isolation. These are described in the table below. If you want examples that demonstrate how to use 51Degrees products such as device detection, then these are available in the corresponding <a href="https://github.com/51Degrees/device-detection-node">repository</a> and on our <a href="https://51degrees.com/documentation/_examples__device_detection__index.html">website</a>.</p>
+<h4>Core</h4>
 <div class="g-table g-table--overflow"><table class="c-table">
 <tr class="c-table__row--heading">
 <td class="c-table__cell">Example  </td><td class="c-table__cell">Description   </td></tr>
 <tr class="c-table__row">
-<td class="c-table__cell">fiftyone.pipeline.core/examples/customFlowElements/simpleEvidenceFlowElement.js  </td><td class="c-table__cell">Demonstrates how to create a custom flow element that takes some evidence (birthdate) and returns something related to that evidence (star sign)   </td></tr>
+<td class="c-table__cell"><a href="/fiftyone.pipeline.core/examples/customFlowElements/simpleEvidenceFlowElement.js">simpleEvidenceFlowElement.js</a>  </td><td class="c-table__cell">Demonstrates how to create a custom flow element that takes some evidence (birthdate) and returns something related to that evidence (star sign).   </td></tr>
 <tr class="c-table__row">
-<td class="c-table__cell">fiftyone.pipeline.core/examples/customFlowelements/clientSideEvidenceFlowElement.js  </td><td class="c-table__cell">Demonstrates how to modify the flow element from the 'simple evidence' example to gather evidence from code running on the client device (i.e. JavaScript).   </td></tr>
-<tr class="c-table__row">
-<td class="c-table__cell">fiftyone.pipeline.engines/examples/onPremiseFlowElement.js  </td><td class="c-table__cell">Demonstrates the creation of an engine that uses an auto-updating datafile to populate properties   </td></tr>
-<tr class="c-table__row">
-<td class="c-table__cell">fiftyone.pipeline.engines/examples/caching.js  </td><td class="c-table__cell">Demonstrates a custom cache that makes use of the result caching feature that engines provide.   </td></tr>
+<td class="c-table__cell"><a href="/fiftyone.pipeline.core/examples/customFlowElements/clientSideEvidenceFlowElement.js">clientSideEvidenceFlowElement.js</a>  </td><td class="c-table__cell">Demonstrates how to modify the flow element from the 'simple evidence' example to gather evidence from code running on the client device (i.e. JavaScript).   </td></tr>
 </table>
-</div> </section></div><!-- PageDoc -->
+</div><h4>Engines</h4>
+<div class="g-table g-table--overflow"><table class="c-table">
+<tr class="c-table__row--heading">
+<td class="c-table__cell">Example  </td><td class="c-table__cell">Description   </td></tr>
+<tr class="c-table__row">
+<td class="c-table__cell"><a href="/fiftyone.pipeline.engines/examples/onPremiseFlowElement.js">onPremiseFlowElement.js</a>  </td><td class="c-table__cell">Demonstrates the creation of an engine that uses an auto-updating datafile to populate properties.   </td></tr>
+<tr class="c-table__row">
+<td class="c-table__cell"><a href="/fiftyone.pipeline.engines/examples/caching.js">caching.js</a>  </td><td class="c-table__cell">Demonstrates a custom cache that makes use of the result caching feature that engines provide.   </td></tr>
+</table>
+</div><h2>Tests</h2>
+<p>Most modules include some automated tests. To run these, make sure jest is installed:</p>
+<div class="c-code__block c-code__block--outline"><div class="c-code__line">npm install jest --global</div></div><p>Then, navigate to the module directory and execute:</p>
+<div class="c-code__block c-code__block--outline"><div class="c-code__line">npm test</div></div> </section></div><!-- PageDoc -->
 </div><!-- primary -->
 </div><!-- inner-->
 <!-- HTML footer for doxygen 1.8.15-->
