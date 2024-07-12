@@ -162,9 +162,10 @@ Public Member Functions</h2>
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
-<tr class="c-table__row memitem:a1207cb30df591c1c22cca1cb585c10ad"><td class="c-table__cell"><a id="a1207cb30df591c1c22cca1cb585c10ad"></a>
-<!-- insertMemberAlign -->
-&#160;</td><td class="c-table__cell"><b>_log</b> (type, message)
+<tr class="c-table__row memitem:a1207cb30df591c1c22cca1cb585c10ad"><td class="c-table__cell"><!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_flow_element.html#a1207cb30df591c1c22cca1cb585c10ad">_log</a> (type, message)
+<!-- startMemberDescription -->
+<div class="c-table__desc memdesc:a1207cb30df591c1c22cca1cb585c10ad">Internal log.  <a href="#a1207cb30df591c1c22cca1cb585c10ad">More...</a><!-- endMemberDescription -->
 </div></td></tr>
 <!-- endMemberList -->
 <!-- end member list -->
@@ -224,6 +225,68 @@ Public Member Functions</h2>
 <h2 class="g-docs__section-heading">Member Function Documentation</h2>
 <!-- startMemberDocList -->
 <article class="c-member">
+<a id="a1207cb30df591c1c22cca1cb585c10ad"></a><!-- startMemberDoc -->
+
+<h2 class="c-member__title"><span class="c-member__anchor"><a href="#a1207cb30df591c1c22cca1cb585c10ad">&#9670;&nbsp;</a></span>_log()</h2>
+
+<div class="c-member__main">
+<div class="c-member__head">
+<!-- startMemberDocName -->
+      <div class="c-member__split">
+        <div class="g-table g-table--overflow">
+          <table class="c-table c-table--article">
+            <tr class="c-table__row">
+              <td class="c-table__cell">FlowElement::_log <!-- endMemberDocName -->
+</td>
+<!-- startParameterList -->
+          <td>(</td>
+<!-- startFirstParameterType -->
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>type</em>, <!-- endParameterName -->
+</td>
+        </tr>
+<!-- startParameterType -->
+        <tr>
+          <td class="c-table__cell"></td>
+          <td></td>
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>message</em><!-- endParameterName -->
+&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td><!-- endParameterList -->
+</td>
+        </tr>
+<!-- endMemberDoc -->
+          </table>
+        </div>
+      </div>
+<!-- startLabels -->
+<div class="c-member__labels">
+<!-- writeLabel(inline) -->
+<span class="c-label">inline</span><!-- endLabels -->
+</div>
+</div><!-- startIndent -->
+<div class="c-member__body">
+
+<p>Internal log. </p>
+<dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - type log type </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - message message to log </dd>
+  </dd>
+</dl>
+<!-- endIndent -->
+
+</div>
+</div>
+</article>
+<article class="c-member">
 <a id="aafd6a7f4076e2499ee1ea86f4a963cb8"></a><!-- startMemberDoc -->
 
 <h2 class="c-member__title"><span class="c-member__anchor"><a href="#aafd6a7f4076e2499ee1ea86f4a963cb8">&#9670;&nbsp;</a></span>constructor()</h2>
@@ -269,6 +332,8 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{EvidenceKeyFilter}</span> - options.evidenceKeyFilter an instance of an <a class="el" href="class_evidence_key_filter.html" title="An evidence key filter is added to a flowElement It tells the pipeline which evidence it is intereste...">EvidenceKeyFilter</a> to filter evidence added to the <a class="el" href="class_pipeline.html" title="Pipeline holding a list of flowElements for processing, can create flowData that will be passed throu...">Pipeline</a> </dd>
   </dd>
 </dl>
+<p>@type {Function[]}</p>
+<p>@type {<a class="el" href="class_pipeline.html" title="Pipeline holding a list of flowElements for processing, can create flowData that will be passed throu...">Pipeline</a>[]}</p>
 <!-- endIndent -->
 
 </div>
@@ -469,7 +534,7 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> being processed </dd>
   </dd>
 </dl>
-<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Mixed} result of processing </dd></dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{*} result of processing </dd></dl>
 <!-- endIndent -->
 
 </div>

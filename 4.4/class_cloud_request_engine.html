@@ -171,15 +171,17 @@ Public Member Functions</h2>
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
-<tr class="c-table__row memitem:afda5f95d68b18240220c1c83d852970f"><td class="c-table__cell"><a id="afda5f95d68b18240220c1c83d852970f"></a>
-<!-- insertMemberAlign -->
-&#160;</td><td class="c-table__cell"><b>propertiesTransform</b> (properties)
+<tr class="c-table__row memitem:afda5f95d68b18240220c1c83d852970f"><td class="c-table__cell"><!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_cloud_request_engine.html#afda5f95d68b18240220c1c83d852970f">propertiesTransform</a> (properties)
+<!-- startMemberDescription -->
+<div class="c-table__desc memdesc:afda5f95d68b18240220c1c83d852970f">Properties transform.  <a href="#afda5f95d68b18240220c1c83d852970f">More...</a><!-- endMemberDescription -->
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
-<tr class="c-table__row memitem:ab430795edbded91c974407d352559edc"><td class="c-table__cell"><a id="ab430795edbded91c974407d352559edc"></a>
-<!-- insertMemberAlign -->
-&#160;</td><td class="c-table__cell"><b>metaPropertyTransform</b> (key, value)
+<tr class="c-table__row memitem:ab430795edbded91c974407d352559edc"><td class="c-table__cell"><!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_cloud_request_engine.html#ab430795edbded91c974407d352559edc">metaPropertyTransform</a> (key, value)
+<!-- startMemberDescription -->
+<div class="c-table__desc memdesc:ab430795edbded91c974407d352559edc">Meta property transform.  <a href="#ab430795edbded91c974407d352559edc">More...</a><!-- endMemberDescription -->
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
@@ -313,9 +315,10 @@ Public Member Functions</h2>
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
-<tr class="c-table__row memitem:a1207cb30df591c1c22cca1cb585c10ad inherit pub_methods_class_flow_element"><td class="c-table__cell"><a id="a1207cb30df591c1c22cca1cb585c10ad"></a>
-<!-- insertMemberAlign -->
-&#160;</td><td class="c-table__cell"><b>_log</b> (type, message)
+<tr class="c-table__row memitem:a1207cb30df591c1c22cca1cb585c10ad inherit pub_methods_class_flow_element"><td class="c-table__cell"><!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_flow_element.html#a1207cb30df591c1c22cca1cb585c10ad">_log</a> (type, message)
+<!-- startMemberDescription -->
+<div class="c-table__desc memdesc:a1207cb30df591c1c22cca1cb585c10ad inherit pub_methods_class_flow_element">Internal log.  <a href="class_flow_element.html#a1207cb30df591c1c22cca1cb585c10ad">More...</a><!-- endMemberDescription -->
 </div></td></tr>
 <!-- endMemberList -->
 <!-- end member list -->
@@ -608,7 +611,7 @@ Public Member Functions</h2>
 <div class="c-member__body">
 
 <p>Internal process to fetch all the properties available under a resourcekey. </p>
-<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Promise} properties from the cloud server </dd></dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Promise&lt;object&gt;} properties from the cloud server </dd></dl>
 <!-- endIndent -->
 
 </div>
@@ -657,7 +660,7 @@ Public Member Functions</h2>
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{FlowData}</span> - flowData <a class="el" href="class_flow_data.html" title="FlowData is created by a specific pipeline It collects evidence set by the user It passes evidence to...">FlowData</a> to get evidence from </dd>
   </dd>
 </dl>
-<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{<a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a>} <a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a> Dictionary </dd></dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{object} <a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a> Dictionary </dd></dl>
 <!-- endIndent -->
 
 </div>
@@ -799,7 +802,7 @@ Public Member Functions</h2>
 
 <p>Used to handle errors from http requests. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{http.ServerResponse}</span> - response Responce to get errors from </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{import('http').ServerResponse}</span> - response Responce to get errors from </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Array&lt;CloudRequestError&gt;} Array of <a class="el" href="class_cloud_request_error.html">CloudRequestError</a> from response </dd></dl>
@@ -843,7 +846,7 @@ Public Member Functions</h2>
 <div class="c-member__body">
 
 <p>Internal function to get evidenceKeys used by cloud resourcekey. </p>
-<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Array} evidence key list </dd></dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Promise} evidence promise </dd></dl>
 <!-- endIndent -->
 
 </div>
@@ -903,7 +906,7 @@ Public Member Functions</h2>
 <p>Get evidence with specified prefix. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
     <tr><dd class="c-list-definition__desc"><span class="b-text--red">{Evidence}</span> - evidence All evidence in the flow data. </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{stirng}</span> - type Required evidence key prefix </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - type Required evidence key prefix </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{<a class="el" href="class_evidence.html" title="Storage of evidence on a flowData object.">Evidence</a>} Selected evidence </dd></dl>
@@ -1018,6 +1021,69 @@ Public Member Functions</h2>
 </div>
 </article>
 <article class="c-member">
+<a id="ab430795edbded91c974407d352559edc"></a><!-- startMemberDoc -->
+
+<h2 class="c-member__title"><span class="c-member__anchor"><a href="#ab430795edbded91c974407d352559edc">&#9670;&nbsp;</a></span>metaPropertyTransform()</h2>
+
+<div class="c-member__main">
+<div class="c-member__head">
+<!-- startMemberDocName -->
+      <div class="c-member__split">
+        <div class="g-table g-table--overflow">
+          <table class="c-table c-table--article">
+            <tr class="c-table__row">
+              <td class="c-table__cell">CloudRequestEngine::metaPropertyTransform <!-- endMemberDocName -->
+</td>
+<!-- startParameterList -->
+          <td>(</td>
+<!-- startFirstParameterType -->
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>key</em>, <!-- endParameterName -->
+</td>
+        </tr>
+<!-- startParameterType -->
+        <tr>
+          <td class="c-table__cell"></td>
+          <td></td>
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>value</em><!-- endParameterName -->
+&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td><!-- endParameterList -->
+</td>
+        </tr>
+<!-- endMemberDoc -->
+          </table>
+        </div>
+      </div>
+<!-- startLabels -->
+<div class="c-member__labels">
+<!-- writeLabel(inline) -->
+<span class="c-label">inline</span><!-- endLabels -->
+</div>
+</div><!-- startIndent -->
+<div class="c-member__body">
+
+<p>Meta property transform. </p>
+<dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - key key to check </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{object}</span> - value properties to transform </dd>
+  </dd>
+</dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{object} transformed properties </dd></dl>
+<!-- endIndent -->
+
+</div>
+</div>
+</article>
+<article class="c-member">
 <a id="acb9f7eba6626f61784c044b3492ddd49"></a><!-- startMemberDoc -->
 
 <h2 class="c-member__title"><span class="c-member__anchor"><a href="#acb9f7eba6626f61784c044b3492ddd49">&#9670;&nbsp;</a></span>processInternal()</h2>
@@ -1060,6 +1126,54 @@ Public Member Functions</h2>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Promise} data from cloud service </dd></dl>
+<!-- endIndent -->
+
+</div>
+</div>
+</article>
+<article class="c-member">
+<a id="afda5f95d68b18240220c1c83d852970f"></a><!-- startMemberDoc -->
+
+<h2 class="c-member__title"><span class="c-member__anchor"><a href="#afda5f95d68b18240220c1c83d852970f">&#9670;&nbsp;</a></span>propertiesTransform()</h2>
+
+<div class="c-member__main">
+<div class="c-member__head">
+<!-- startMemberDocName -->
+      <div class="c-member__split">
+        <div class="g-table g-table--overflow">
+          <table class="c-table c-table--article">
+            <tr class="c-table__row">
+              <td class="c-table__cell">CloudRequestEngine::propertiesTransform <!-- endMemberDocName -->
+</td>
+<!-- startParameterList -->
+          <td>(</td>
+<!-- startFirstParameterType -->
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>properties</em><!-- endParameterName -->
+</td><td>)</td>
+          <td><!-- endParameterList -->
+</td>
+        </tr>
+<!-- endMemberDoc -->
+          </table>
+        </div>
+      </div>
+<!-- startLabels -->
+<div class="c-member__labels">
+<!-- writeLabel(inline) -->
+<span class="c-label">inline</span><!-- endLabels -->
+</div>
+</div><!-- startIndent -->
+<div class="c-member__body">
+
+<p>Properties transform. </p>
+<dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{object}</span> - properties properties to transform </dd>
+  </dd>
+</dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{object} transformed properties </dd></dl>
 <!-- endIndent -->
 
 </div>

@@ -225,8 +225,8 @@ Public Member Functions</h2>
 
 <p>Make a GET request to the specified url. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - url The url to send a request to </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - origin The value to use for the Origin header when making the request </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - url The url to send a request to </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string</span> - | null} origin The value to use for the Origin header when making the request </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Promise} The resolve function will be passed the content from the response and the reject function will be passed an object with 3 properties: headers = HTTP headers in the response statusCode = HTTP status code of response content = The content of the response or an error message </dd></dl>
@@ -298,9 +298,9 @@ Public Member Functions</h2>
 
 <p>Make a POST request to the specified url. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - url The url to send a request to </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - data The data to send in the body of the request </dd>
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - origin The value to use for the Origin header when making the request </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - url The url to send a request to </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{object</span> - | null} data The data to send in the body of the request </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string</span> - | null} origin The value to use for the Origin header when making the request </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{Promise} The resolve function will be passed the content from the response and the reject function will be passed an object with 3 properties: headers = HTTP headers in the response statusCode = HTTP status code of response content = The content of the response or an error message </dd></dl>

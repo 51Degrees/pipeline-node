@@ -124,10 +124,10 @@ Public Member Functions</h2>
 </div></td></tr>
 <!-- member dec start -->
 <!-- startMemberItem() -->
-<tr class="c-table__row memitem:add0a70c88d57585689ab95c939596a66"><td class="c-table__cell"><!-- insertMemberAlign -->
-&#160;</td><td class="c-table__cell"><a class="el" href="class_tracker.html#add0a70c88d57585689ab95c939596a66">match</a> (result)
+<tr class="c-table__row memitem:a1e2bd17605ba5b3065d0665711d46fdd"><td class="c-table__cell"><!-- insertMemberAlign -->
+&#160;</td><td class="c-table__cell"><a class="el" href="class_tracker.html#a1e2bd17605ba5b3065d0665711d46fdd">match</a> (key, value)
 <!-- startMemberDescription -->
-<div class="c-table__desc memdesc:add0a70c88d57585689ab95c939596a66">If object is found in cache, the match function is called.  <a href="#add0a70c88d57585689ab95c939596a66">More...</a><!-- endMemberDescription -->
+<div class="c-table__desc memdesc:a1e2bd17605ba5b3065d0665711d46fdd">If object is found in cache, the match function is called.  <a href="#a1e2bd17605ba5b3065d0665711d46fdd">More...</a><!-- endMemberDescription -->
 </div></td></tr>
 <!-- writeInheritedSectionTitle -->
 <tr class="c-table__row pub_methods_class_data_keyed_cache"><td class="c-table__cell c-table__cell--parent" colspan="2" onclick="javascript:toggleInherit('pub_methods_class_data_keyed_cache')"><span class="c-table__arrow c-table__arrow--is-open"></span><h3 class="c-table__heading">Public Member Functions inherited from <a class="el" href="class_data_keyed_cache.html">DataKeyedCache</a></h3></td></tr>
@@ -203,9 +203,9 @@ Public Member Functions</h2>
 <h2 class="g-docs__section-heading">Member Function Documentation</h2>
 <!-- startMemberDocList -->
 <article class="c-member">
-<a id="add0a70c88d57585689ab95c939596a66"></a><!-- startMemberDoc -->
+<a id="a1e2bd17605ba5b3065d0665711d46fdd"></a><!-- startMemberDoc -->
 
-<h2 class="c-member__title"><span class="c-member__anchor"><a href="#add0a70c88d57585689ab95c939596a66">&#9670;&nbsp;</a></span>match()</h2>
+<h2 class="c-member__title"><span class="c-member__anchor"><a href="#a1e2bd17605ba5b3065d0665711d46fdd">&#9670;&nbsp;</a></span>match()</h2>
 
 <div class="c-member__main">
 <div class="c-member__head">
@@ -222,9 +222,23 @@ Public Member Functions</h2>
           <td class="c-table__cell"><!-- endParameterType -->
 &#160;</td>
 <!-- startParameterName -->
-          <td class="c-table__cell"><em>result</em><!-- endParameterName -->
-</td><td>)</td>
-          <td><!-- endParameterList -->
+          <td class="c-table__cell"><em>key</em>, <!-- endParameterName -->
+</td>
+        </tr>
+<!-- startParameterType -->
+        <tr>
+          <td class="c-table__cell"></td>
+          <td></td>
+          <td class="c-table__cell"><!-- endParameterType -->
+&#160;</td>
+<!-- startParameterName -->
+          <td class="c-table__cell"><em>value</em><!-- endParameterName -->
+&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td><!-- endParameterList -->
 </td>
         </tr>
 <!-- endMemberDoc -->
@@ -241,10 +255,11 @@ Public Member Functions</h2>
 
 <p>If object is found in cache, the match function is called. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{object}</span> - result of the track function </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{string}</span> - key key of piece of evidence </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - value value of piece of evidence </dd>
   </dd>
 </dl>
-<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{boolean} whether a match has been made </dd></dl>
+<dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{boolean} whether put in cache </dd></dl>
 <!-- endIndent -->
 
 </div>
@@ -289,7 +304,7 @@ Public Member Functions</h2>
 
 <p>The track method calls the dataKeyedCache get method, if it receives a result it sends it onto a match function. </p>
 <dl class="c-list-definition"><dt class="c-list-definition__title">Parameters</dt><dd class="c-list-definition__desc">
-    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{mixed}</span> - key cache key to run through tracker </dd>
+    <tr><dd class="c-list-definition__desc"><span class="b-text--red">{*}</span> - key cache key to run through tracker </dd>
   </dd>
 </dl>
 <dl class="c-list-definition return"><dt class="c-list-definition__title">Returns</dt><dd class="c-list-definition__desc">{boolean} result of tracking </dd></dl>
