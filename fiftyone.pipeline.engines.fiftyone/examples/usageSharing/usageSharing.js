@@ -36,9 +36,8 @@
  * These are all optional, so each can be omitted if the default
  * for that option is sufficient:
  *
- * For details of what each setting does, see the constructor
- * parameters in the reference documentation for the
- * [share usage element](https://51degrees.com/pipeline-node/class_share_usage.html)
+ * For details of what each setting does, see the
+ * [Share Usage reference](/documentation/4.5/_pipeline_api__features__usage_sharing.html)
  *
  * This example is available in full on [GitHub](https://github.com/51Degrees/pipeline-node/tree/master/fiftyone.pipeline.engines.fiftyone/examples/usageSharing/usageSharing.js).
  *
