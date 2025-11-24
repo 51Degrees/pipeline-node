@@ -19,15 +19,15 @@
   "author": "51Degrees Engineering <engineering@51degrees.com>",
   "dependencies": {
     "mustache": "^4.2.0",
-    "uglify-js": "^3.17.4"
+    "uglify-js": "^3.19.3"
   },
   "devDependencies": {
     "@types/jest": "^27.5.2",
-    "@types/node": "^20.14.10",
+    "@types/node": "^20.19.25",
     "jest": "^27.5.1",
     "jest-each": "^27.5.1",
-    "node-mocks-http": "^1.13.0",
-    "typescript": "^5.5.3"
+    "node-mocks-http": "^1.17.2",
+    "typescript": "^5.9.3"
   },
   "license": "EUPL-1.2",
   "bugs": {
