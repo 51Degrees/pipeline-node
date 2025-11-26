@@ -174,14 +174,31 @@ class SetHeadersElement extends FlowElement {
     try {
       const value = element[propertyKey];
       if (value !== undefined && value !== null) {
-        if (value instanceof AspectPropertyValue) {
+        // Use duck typing to check for AspectPropertyValue-like objects.
+        // This handles cases where the object comes from a different package
+        // instance (e.g., different versions in node_modules) where instanceof
+        // would fail even though the object has the same structure.
+        const isAspectPropertyValue = value instanceof AspectPropertyValue ||
+          (typeof value === 'object' && 'hasValue' in value);
+
+        if (isAspectPropertyValue) {
           if (value.hasValue && value.value !== 'Unknown') {
             return value.value;
           } else {
             return undefined;
           }
+        } else if (typeof value === 'string') {
+          return value;
         } else {
-          return value.toString();
+          // For other types, convert to string but warn if it results in [object Object]
+          const strValue = value.toString();
+          if (strValue === '[object Object]') {
+            // Try to extract value property if present
+            if (value.value !== undefined) {
+              return value.value.toString();
+            }
+          }
+          return strValue;
         }
       }
     } catch (e) {
