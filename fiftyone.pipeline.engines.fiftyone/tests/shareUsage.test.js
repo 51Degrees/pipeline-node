@@ -390,10 +390,22 @@ test('share usage - send  more than once', done => {
       setTimeout(() => {
         expect(usageEngine.shareData.length).toBe(0);
         expect(received.length).toBe(2);
-        expect(received[0]).toContain('ua 1');
-        expect(received[0]).not.toContain('ua 2');
-        expect(received[1]).toContain('ua 2');
-        expect(received[1]).not.toContain('ua 1');
+        // HTTP requests are asynchronous, so we can't guarantee the order
+        // in which they arrive at the server. Check that each UA appears
+        // in exactly one message without assuming order.
+        const msg1Contains1 = received[0].includes('ua 1');
+        const msg1Contains2 = received[0].includes('ua 2');
+        const msg2Contains1 = received[1].includes('ua 1');
+        const msg2Contains2 = received[1].includes('ua 2');
+        // Each message should contain exactly one UA
+        expect(msg1Contains1 !== msg1Contains2).toBe(true);
+        expect(msg2Contains1 !== msg2Contains2).toBe(true);
+        // Both UAs should be present across the two messages
+        expect(msg1Contains1 || msg2Contains1).toBe(true);
+        expect(msg1Contains2 || msg2Contains2).toBe(true);
+        // Each UA should appear in exactly one message
+        expect(msg1Contains1 !== msg2Contains1).toBe(true);
+        expect(msg1Contains2 !== msg2Contains2).toBe(true);
         done();
       }, 6000);
     });
