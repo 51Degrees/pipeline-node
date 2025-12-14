@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@types/jest": "^27.5.2",
-    "@types/node": "^20.19.26",
+    "@types/node": "^20.19.27",
     "jest": "^27.5.1",
     "typescript": "^5.9.3"
   },
