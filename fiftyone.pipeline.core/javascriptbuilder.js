@@ -81,7 +81,7 @@ class JavaScriptBuilderElement extends FlowElement {
    * @param {boolean} options.enableCookies Whether the client JavaScript
    * stored results of client side processing in cookies. This can also
    * be set per request, using the "query.fod-js-enable-cookies" evidence key.
-   * For more details on personal data policy, see http://51degrees.com/terms/client-services-privacy-policy/
+   * For more details on personal data policy, see https://51degrees.com/terms/client-services-privacy-policy/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-node&utm_content=fiftyone.pipeline.core-javascriptbuilder.js&utm_term=constructor
    * @param {boolean} options.minify Whether to minify the JavaScript
    */
   constructor ({
