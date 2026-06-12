@@ -125,6 +125,28 @@ class DataFileUpdateService {
       request = http.get(requestOptions);
     }
 
+    // Without an error listener a connection failure (for example a
+    // refused or reset connection) emits an unhandled 'error' event,
+    // which crashes the whole process.
+    request.on('error', function (err) {
+      dataFile.updating = false;
+
+      dataFileUpdateService.pipeline.log(
+        'error',
+        "Error fetching data file update from '" +
+        dataFile.updateUrl +
+        "' for engine '" +
+        dataFile.flowElement.dataKey + "'. " +
+        err.message);
+
+      dataFileUpdateService.eventEmitter.emit(
+        'updateComplete',
+        AutoUpdateStatus.AUTO_UPDATE_HTTPS_ERR,
+        dataFile);
+
+      dataFileUpdateService.checkNextUpdate(dataFile);
+    });
+
     request.on('response', function (response) {
       if (response.statusCode !== 200) {
         dataFile.updating = false;
