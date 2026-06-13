@@ -1,6 +1,6 @@
-![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=repository&utm_content=readme_main&utm_campaign=node-open-source "Data rewards the curious") **Node Pipeline**
+![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=readme&utm_campaign=pipeline-node&utm_content=readme.md&utm_term=top "Data rewards the curious") **Node Pipeline**
 
-[Developer Documentation](https://51degrees.com/pipeline-node/index.html?utm_source=github&utm_medium=repository&utm_content=documentation&utm_campaign=node-open-source "developer documentation")
+[Developer Documentation](https://51degrees.com/pipeline-node/index.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-node&utm_content=readme.md&utm_term=top "developer documentation")
 
 ## Introduction
 This repository contains the components of the Node.JS implementation of the 51Degrees Pipeline API.
@@ -10,7 +10,7 @@ add a range of 51Degrees and/or custom plug ins (Engines)
 
 ## Dependencies
 
-The [tested versions](https://51degrees.com/documentation/_info__tested_versions.html) page shows 
+The [tested versions](https://51degrees.com/documentation/_info__tested_versions.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-node&utm_content=readme.md&utm_term=dependencies) page shows 
 the Node versions that we currently test against. The software may run fine against other versions, 
 but additional caution should be applied.
 
@@ -42,7 +42,7 @@ npm install <path to module>
 ## Examples
 
 There are several examples available that demonstrate how to make use of the Pipeline API in isolation. These are described in the table below.
-If you want examples that demonstrate how to use 51Degrees products such as device detection, then these are available in the corresponding [repository](https://github.com/51Degrees/device-detection-node) and on our [website](https://51degrees.com/documentation/_examples__device_detection__index.html).
+If you want examples that demonstrate how to use 51Degrees products such as device detection, then these are available in the corresponding [repository](https://github.com/51Degrees/device-detection-node) and on our [website](https://51degrees.com/documentation/_examples__device_detection__index.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-node&utm_content=readme.md&utm_term=examples).
 
 #### Core
 
