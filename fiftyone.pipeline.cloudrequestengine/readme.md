@@ -10,7 +10,7 @@ The 51Degrees Pipeline API is a generic web request intelligence and data proces
 
 This package uses the `engines` class created by the [`fiftyone.pipeline.engines`](/fiftyone.pipeline.engines#readme.md). It makes available:
 
-* A `Cloud Request Engine` which calls the 51Degrees cloud service to fetch properties and metadata about them based on a provided resource key. Get a resource key at https://configure.51degrees.com/
+* A `Cloud Request Engine` which calls the 51Degrees cloud service to fetch properties and metadata about them based on a provided resource key. A resource key with the free properties used by the tests can be created at https://configure.51degrees.com/Wkqxf3Bs
 * A `Cloud Engine` template which reads data from the Cloud Request Engine.
 
 It is used by the cloud versions of the following 51Degrees engines:
@@ -37,4 +37,8 @@ Then, navigate to the module directory and execute:
 ```
 npm test
 ```
+
+The integration tests read the resource key from the aligned
+`51DEGREES_RESOURCE_KEY` environment variable first, then the legacy
+`RESOURCE_KEY` variable.
 
