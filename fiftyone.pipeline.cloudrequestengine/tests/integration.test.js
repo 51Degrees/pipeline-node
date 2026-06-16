@@ -36,9 +36,9 @@ const pipelineBuilderPath = path.resolve(__dirname, '..', '..', 'fiftyone.pipeli
 const CloudEngine = require(cloudEnginePath);
 const PipelineBuilder = require(pipelineBuilderPath);
 
-// The aligned 51DEGREES_RESOURCE_KEY environment variable is checked
+// The aligned _51DEGREES_RESOURCE_KEY environment variable is checked
 // first, then the legacy RESOURCE_KEY variable.
-const myResourceKey = process.env['51DEGREES_RESOURCE_KEY'] ||
+const myResourceKey = process.env['_51DEGREES_RESOURCE_KEY'] ||
   process.env.RESOURCE_KEY || '!!YOUR_RESOURCE_KEY!!';
 
 /**
@@ -51,7 +51,7 @@ test('valid response', done => {
   if (myResourceKey === '!!YOUR_RESOURCE_KEY!!') {
     fail('You need to create a resource key at ' +
         'https://configure.51degrees.com/Wkqxf3Bs and supply it in ' +
-        'the 51DEGREES_RESOURCE_KEY environment variable, or paste ' +
+        'the _51DEGREES_RESOURCE_KEY environment variable, or paste ' +
         'it into the code replacing !!YOUR_RESOURCE_KEY!!. Please ' +
         'make sure to include the IsMobile property.');
   }
@@ -85,7 +85,7 @@ test('post with sequence evidence', done => {
   if (myResourceKey === '!!YOUR_RESOURCE_KEY!!') {
     fail('You need to create a resource key at ' +
         'https://configure.51degrees.com/Wkqxf3Bs and supply it in ' +
-        'the 51DEGREES_RESOURCE_KEY environment variable, or paste ' +
+        'the _51DEGREES_RESOURCE_KEY environment variable, or paste ' +
         'it into the code replacing !!YOUR_RESOURCE_KEY!!. Please ' +
         'make sure to include the IsMobile property.');
   }
