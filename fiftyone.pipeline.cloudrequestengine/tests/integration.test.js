@@ -36,7 +36,10 @@ const pipelineBuilderPath = path.resolve(__dirname, '..', '..', 'fiftyone.pipeli
 const CloudEngine = require(cloudEnginePath);
 const PipelineBuilder = require(pipelineBuilderPath);
 
-const myResourceKey = process.env.RESOURCE_KEY || '!!YOUR_RESOURCE_KEY!!';
+// The aligned _51DEGREES_RESOURCE_KEY environment variable is checked
+// first, then the legacy RESOURCE_KEY variable.
+const myResourceKey = process.env['_51DEGREES_RESOURCE_KEY'] ||
+  process.env.RESOURCE_KEY || '!!YOUR_RESOURCE_KEY!!';
 
 /**
  * Verify that cloud engine returns isMobile property in response.
@@ -47,9 +50,10 @@ const myResourceKey = process.env.RESOURCE_KEY || '!!YOUR_RESOURCE_KEY!!';
 test('valid response', done => {
   if (myResourceKey === '!!YOUR_RESOURCE_KEY!!') {
     fail('You need to create a resource key at ' +
-        'https://configure.51degrees.com and paste it into the ' +
-        'code, replacing !!YOUR_RESOURCE_KEY!!. Please make sure ' +
-        'to include IsMobile property.');
+        'https://configure.51degrees.com/Wkqxf3Bs and supply it in ' +
+        'the _51DEGREES_RESOURCE_KEY environment variable, or paste ' +
+        'it into the code replacing !!YOUR_RESOURCE_KEY!!. Please ' +
+        'make sure to include the IsMobile property.');
   }
   const cloud = new CloudRequestEngine({
     resourceKey: myResourceKey,
@@ -80,9 +84,10 @@ test('valid response', done => {
 test('post with sequence evidence', done => {
   if (myResourceKey === '!!YOUR_RESOURCE_KEY!!') {
     fail('You need to create a resource key at ' +
-        'https://configure.51degrees.com and paste it into the ' +
-        'code, replacing !!YOUR_RESOURCE_KEY!!. Please make sure ' +
-        'to include IsMobile property.');
+        'https://configure.51degrees.com/Wkqxf3Bs and supply it in ' +
+        'the _51DEGREES_RESOURCE_KEY environment variable, or paste ' +
+        'it into the code replacing !!YOUR_RESOURCE_KEY!!. Please ' +
+        'make sure to include the IsMobile property.');
   }
 
   const cloud = new CloudRequestEngine({ resourceKey: myResourceKey });

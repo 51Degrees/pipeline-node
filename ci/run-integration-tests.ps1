@@ -1,11 +1,7 @@
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName,
-    [string]$TestResourceKey
+    [Parameter(Mandatory)][string]$RepoName,
+    [Parameter(Mandatory)][string]$TestResourceKey
 )
 
-$env:RESOURCE_KEY = $TestResourceKey
-
+$env:_51DEGREES_RESOURCE_KEY = $TestResourceKey
 ./node/run-integration-tests.ps1 -RepoName $RepoName
-
-exit $LASTEXITCODE
