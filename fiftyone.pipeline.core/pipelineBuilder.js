@@ -52,6 +52,13 @@ class PipelineBuilder {
    * @param {typeof import('./javascriptbuilder').prototype.settings} settings.javascriptBuilderSettings
    * The settings to pass to the JavaScriptBuilder.
    * See JavaScriptBuilder class for details.
+   * @param {boolean} settings.suppressProcessExceptions Whether errors
+   * thrown while processing should be suppressed. When false (the
+   * default) the first error is re-thrown from flowData.process(); when
+   * true errors are stored on flowData.errors and emitted via the
+   * pipeline 'error' event instead, and process() resolves normally.
+   * Recommended true for web apps so a processing failure degrades
+   * gracefully instead of failing the request.
    */
   constructor (settings = {}) {
     /**
@@ -77,6 +84,12 @@ class PipelineBuilder {
       this.useSetHeaderProperties = settings.useSetHeaderProperties;
     } else {
       this.useSetHeaderProperties = true;
+    }
+
+    if (typeof settings.suppressProcessExceptions !== 'undefined') {
+      this.suppressProcessExceptions = settings.suppressProcessExceptions;
+    } else {
+      this.suppressProcessExceptions = false;
     }
   }
 
@@ -128,7 +141,35 @@ class PipelineBuilder {
 
     flowElements = this.addRequiredElements(flowElements);
 
-    return new Pipeline(flowElements, false, this.dataFileUpdateService);
+    return new Pipeline(
+      flowElements,
+      this.getSuppressProcessExceptions(config),
+      this.dataFileUpdateService);
+  }
+
+  /**
+   * Resolve the suppressProcessExceptions setting for a configuration.
+   * Looks for it under 'PipelineOptions.BuildParameters' (mirrors the
+   * .NET/Java config layout for cross-language consistency), falling
+   * back to a 'PipelineOptions.suppressProcessExceptions' key and then
+   * to the value supplied to the builder constructor (default false).
+   *
+   * @param {object} config a JSON configuration object
+   * @returns {boolean} whether processing exceptions should be suppressed
+   */
+  getSuppressProcessExceptions (config) {
+    const options = config.PipelineOptions || {};
+
+    if (options.BuildParameters &&
+      typeof options.BuildParameters.suppressProcessExceptions !== 'undefined') {
+      return options.BuildParameters.suppressProcessExceptions;
+    }
+
+    if (typeof options.suppressProcessExceptions !== 'undefined') {
+      return options.suppressProcessExceptions;
+    }
+
+    return this.suppressProcessExceptions;
   }
 
   /**
@@ -231,7 +272,10 @@ class PipelineBuilder {
    */
   build () {
     this.flowElements = this.addRequiredElements(this.flowElements);
-    return new Pipeline(this.flowElements, false, this.dataFileUpdateService);
+    return new Pipeline(
+      this.flowElements,
+      this.suppressProcessExceptions,
+      this.dataFileUpdateService);
   }
 }
 

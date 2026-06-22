@@ -25,11 +25,19 @@ declare class PipelineBuilder {
      * @param {typeof import('./javascriptbuilder').prototype.settings} settings.javascriptBuilderSettings
      * The settings to pass to the JavaScriptBuilder.
      * See JavaScriptBuilder class for details.
+     * @param {boolean} settings.suppressProcessExceptions Whether errors
+     * thrown while processing should be suppressed. When false (the
+     * default) the first error is re-thrown from flowData.process(); when
+     * true errors are stored on flowData.errors and emitted via the
+     * pipeline 'error' event instead, and process() resolves normally.
+     * Recommended true for web apps so a processing failure degrades
+     * gracefully instead of failing the request.
      */
     constructor(settings?: {
         addJavaScriptBuilder: boolean;
         useSetHeaderProperties: boolean;
         javascriptBuilderSettings: typeof import("./javascriptbuilder").prototype.settings;
+        suppressProcessExceptions: boolean;
     });
     /**
      * @type {FlowElement[]}
@@ -46,6 +54,7 @@ declare class PipelineBuilder {
         minify: boolean;
     };
     useSetHeaderProperties: boolean;
+    suppressProcessExceptions: boolean;
     /**
      * Helper that loads a JSON configuration file from
      * the filesystem and calls pipelineBuilder.buildFromConfiguration
@@ -61,6 +70,17 @@ declare class PipelineBuilder {
      * @returns {Pipeline} the constructed pipeline
      */
     buildFromConfiguration(config: object): Pipeline;
+    /**
+     * Resolve the suppressProcessExceptions setting for a configuration.
+     * Looks for it under 'PipelineOptions.BuildParameters' (mirrors the
+     * .NET/Java config layout for cross-language consistency), falling
+     * back to a 'PipelineOptions.suppressProcessExceptions' key and then
+     * to the value supplied to the builder constructor (default false).
+     *
+     * @param {object} config a JSON configuration object
+     * @returns {boolean} whether processing exceptions should be suppressed
+     */
+    getSuppressProcessExceptions(config: object): boolean;
     /**
      * Add required elements to an existing FlowElement array
      *
