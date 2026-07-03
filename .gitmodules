@@ -4,4 +4,4 @@
 [submodule "owid-js"]
 	path = owid-js
 	url = ../owid-js.git
-	branch = feature/offline-verify
+	branch = main
