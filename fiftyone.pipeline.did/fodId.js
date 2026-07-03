@@ -121,12 +121,18 @@ class FodId {
   }
 
   /**
-   * Promotes an already-parsed owid instance into a 51Did.
+   * Promotes an already-parsed owid instance into a 51Did. The owid is
+   * **copied** (re-parsed from its base64), not aliased, so a FodId can never
+   * desync from its envelope if the caller later mutates the owid it passed
+   * in.
    * @param {object} owidInstance
    * @returns {FodId}
    */
   static fromOwid (owidInstance) {
-    return new FodId(owidInstance);
+    if (owidInstance === null || owidInstance === undefined) {
+      throw new TypeError('owid must not be null or undefined');
+    }
+    return new FodId(new owid(owidInstance.data));
   }
 
   /** @returns {number} the 1-byte usage flags bit-mask (0-255). */
@@ -150,11 +156,6 @@ class FodId {
    */
   get hash () {
     return this._hash.slice();
-  }
-
-  /** @returns {object} the wrapped owid instance. */
-  get owid () {
-    return this._owid;
   }
 
   /** @returns {number} the OWID version. */

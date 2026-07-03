@@ -136,9 +136,11 @@ describe('FodId', () => {
       .toBe(FodId.RANDOM_PAYLOAD_LENGTH);
   });
 
-  test('FodId wraps an owid', () => {
+  test('exposes OWID-level fields', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
-    expect(fod.owid).toBeInstanceOf(owid);
+    // OWID-level concerns are delegated to the wrapped envelope.
+    expect(fod.domain).toBe(DOMAIN);
+    expect(fod.version).toBeDefined();
   });
 
   test('fromBase64 unpacks all three fields', () => {
@@ -339,6 +341,17 @@ describe('FodId', () => {
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.hash).toEqual(canonicalHash());
+  });
+
+  test('fromOwid is decoupled from the source owid', () => {
+    // Mutating the source owid after construction must not affect the FodId
+    // (it holds an independent copy).
+    const o = new owid(envelopeBase64(canonicalPayload()));
+    const fod = FodId.fromOwid(o);
+    o.owid.payload = new Uint8Array(FodId.PAYLOAD_LENGTH); // mutate the source
+    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
   });
 
   test('verify with the wrong key returns false', async () => {
