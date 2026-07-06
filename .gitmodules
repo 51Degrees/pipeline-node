@@ -1,7 +1,3 @@
 [submodule "fiftyone.pipeline.core/javascript-templates"]
 	path = fiftyone.pipeline.core/javascript-templates
 	url = https://github.com/51Degrees/javascript-templates
-[submodule "owid-js"]
-	path = owid-js
-	url = https://github.com/51Degrees/owid-js
-	branch = main

@@ -16,7 +16,7 @@
   "author": "51Degrees Engineering <engineering@51degrees.com>",
   "license": "EUPL-1.2",
   "dependencies": {
-    "owid": "file:../owid-js"
+    "owid": "github:51Degrees/owid-js#main"
   },
   "devDependencies": {
     "jest": "^29.7.0"
