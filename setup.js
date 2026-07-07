@@ -21,3 +21,20 @@
  * ********************************************************************* */
 
 jest.setTimeout(10000); // in milliseconds
+
+// Ensure the Web Crypto and base64 globals that owid-based packages (e.g.
+// fiftyone.pipeline.did) rely on are present in the Jest sandbox. A normal
+// Node 19+ runtime exposes these already; on older runtimes they are absent,
+// which surfaced as "ReferenceError: crypto is not defined" in CI. The guards
+// make this a no-op where the globals already exist.
+const { webcrypto } = require('crypto');
+
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto;
+}
+if (typeof globalThis.atob !== 'function') {
+  globalThis.atob = (b64) => Buffer.from(b64, 'base64').toString('binary');
+}
+if (typeof globalThis.btoa !== 'function') {
+  globalThis.btoa = (bin) => Buffer.from(bin, 'binary').toString('base64');
+}
