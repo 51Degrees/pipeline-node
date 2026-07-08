@@ -26,7 +26,7 @@
     "@types/node": "^20.19.43",
     "jest": "^27.5.1",
     "jest-each": "^27.5.1",
-    "node-mocks-http": "^1.17.2",
+    "node-mocks-http": "^1.18.0",
     "typescript": "^5.9.3"
   },
   "license": "EUPL-1.2",
