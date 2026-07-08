@@ -53,15 +53,17 @@ class FodId {
 
   /**
    * Promotes an already-parsed owid instance into a 51Did by unpacking its
-   * payload.
+   * payload. The owid is **copied** (re-parsed from its base64), not aliased,
+   * so a FodId can never desync from its envelope if the caller later mutates
+   * the owid they passed in.
    * @param {object} owidInstance an owid instance (from `new owid(base64)`)
    */
   constructor (owidInstance) {
     if (owidInstance === null || owidInstance === undefined) {
       throw new TypeError('owid must not be null or undefined');
     }
-    this._owid = owidInstance;
-    const payload = owidInstance.owid.payload;
+    this._owid = new owid(owidInstance.data);
+    const payload = this._owid.owid.payload;
     const length = payload ? payload.length : 0;
     if (!payload || length < FodId.HEADER_LENGTH) {
       throw new RangeError(
@@ -121,10 +123,10 @@ class FodId {
   }
 
   /**
-   * Promotes an already-parsed owid instance into a 51Did. The owid is
-   * **copied** (re-parsed from its base64), not aliased, so a FodId can never
-   * desync from its envelope if the caller later mutates the owid it passed
-   * in.
+   * Promotes an already-parsed owid instance into a 51Did. The constructor
+   * **copies** the owid (re-parsed from its base64), not aliases it, so a
+   * FodId can never desync from its envelope if the caller later mutates the
+   * owid it passed in.
    * @param {object} owidInstance
    * @returns {FodId}
    */
@@ -132,7 +134,7 @@ class FodId {
     if (owidInstance === null || owidInstance === undefined) {
       throw new TypeError('owid must not be null or undefined');
     }
-    return new FodId(new owid(owidInstance.data));
+    return new FodId(owidInstance);
   }
 
   /** @returns {number} the 1-byte usage flags bit-mask (0-255). */

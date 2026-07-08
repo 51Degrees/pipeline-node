@@ -354,6 +354,17 @@ describe('FodId', () => {
     expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
   });
 
+  test('constructor is decoupled from the source owid', () => {
+    // The constructor must copy the owid too, not just fromOwid - mutating the
+    // source afterwards must not affect the FodId.
+    const o = new owid(envelopeBase64(canonicalPayload()));
+    const fod = new FodId(o);
+    o.owid.payload = new Uint8Array(FodId.PAYLOAD_LENGTH); // mutate the source
+    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
+  });
+
   test('verify with the wrong key returns false', async () => {
     const { base64 } = await signedVerifiable(canonicalPayload());
     const otherPublicPem = await randomPublicPem();
