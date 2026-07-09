@@ -20,21 +20,41 @@
  * such notice(s) shall fulfill the requirements of that article.
  * ********************************************************************* */
 
-jest.setTimeout(10000); // in milliseconds
+const NAMES = ['Probabilistic', 'Random', 'HashedEmail', 'Reserved'];
 
-// Ensure the Web Crypto and base64 globals that owid-based packages (e.g.
-// fiftyone.pipeline.did) rely on are present in the Jest sandbox. A normal
-// Node 19+ runtime exposes these already; on older runtimes they are absent,
-// which surfaced as "ReferenceError: crypto is not defined" in CI. The guards
-// make this a no-op where the globals already exist.
-const { webcrypto } = require('crypto');
+/**
+ * The identifier type carried in bits 6-7 of the 51Did flags byte. Existing
+ * identifiers were issued with these bits zeroed, so they decode as
+ * PROBABILISTIC. The type selects the length of the value that follows the
+ * header in the payload.
+ */
+const IdType = Object.freeze({
+  /** Device fingerprint + IP. Payload carries a 32-byte SHA-256 value. */
+  PROBABILISTIC: 0,
+  /** Server-generated random GUID. Payload carries 16 GUID bytes. */
+  RANDOM: 1,
+  /** Caller email + salt. Payload carries a 32-byte SHA-256 value. */
+  HASHED_EMAIL: 2,
+  /** Not yet assigned. Parsed best-effort; remaining bytes exposed as-is. */
+  RESERVED: 3,
 
-if (!globalThis.crypto) {
-  globalThis.crypto = webcrypto;
-}
-if (typeof globalThis.atob !== 'function') {
-  globalThis.atob = (b64) => Buffer.from(b64, 'base64').toString('binary');
-}
-if (typeof globalThis.btoa !== 'function') {
-  globalThis.btoa = (bin) => Buffer.from(bin, 'binary').toString('base64');
-}
+  /**
+   * Decodes the identifier type from the top two bits (6-7) of a flags byte.
+   * @param {number} flags the 1-byte flags value (0-255)
+   * @returns {number} the IdType value
+   */
+  fromFlags (flags) {
+    return (flags >> 6) & 0b11;
+  },
+
+  /**
+   * The human-readable name of an IdType value.
+   * @param {number} type an IdType value
+   * @returns {string}
+   */
+  name (type) {
+    return NAMES[type];
+  }
+});
+
+module.exports = IdType;

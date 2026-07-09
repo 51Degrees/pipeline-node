@@ -20,13 +20,8 @@
  * such notice(s) shall fulfill the requirements of that article.
  * ********************************************************************* */
 
-jest.setTimeout(10000); // in milliseconds
-
-// Ensure the Web Crypto and base64 globals that owid-based packages (e.g.
-// fiftyone.pipeline.did) rely on are present in the Jest sandbox. A normal
-// Node 19+ runtime exposes these already; on older runtimes they are absent,
-// which surfaced as "ReferenceError: crypto is not defined" in CI. The guards
-// make this a no-op where the globals already exist.
+// Ensure the Web Crypto and base64 globals owid-js relies on are present in
+// the Jest sandbox. In a normal Node 19+ runtime these already exist.
 const { webcrypto } = require('crypto');
 
 if (!globalThis.crypto) {
