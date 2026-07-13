@@ -1,0 +1,38 @@
+{
+  "name": "fiftyone.pipeline.translation",
+  "version": "1.0.21",
+  "description": "Translation flow element for the 51Degrees Pipeline API. Translates string based property values from one element to another using YAML translation files.",
+  "keywords": [
+    "51degrees",
+    "pipeline",
+    "translation",
+    "language"
+  ],
+  "main": "index.js",
+  "types": "types/index.d.ts",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "51Degrees Engineering <engineering@51degrees.com>",
+  "dependencies": {
+    "fiftyone.pipeline.core": "4.5.x",
+    "js-yaml": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.5.2",
+    "@types/node": "^20.19.43",
+    "jest": "^27.5.1",
+    "typescript": "^5.9.3"
+  },
+  "license": "EUPL-1.2",
+  "bugs": {
+    "url": "https://github.com/51Degrees/pipeline-node/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/51Degrees/pipeline-node"
+  }
+}
