@@ -1,8 +1,6 @@
-param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName
-)
+param ([Parameter(Mandatory)][string]$RepoName)
+$ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
-./node/run-unit-tests.ps1 -RepoName $RepoName
-
-exit $LASTEXITCODE
+$env:JEST_JUNIT_OUTPUT_DIR = "$PWD/$RepoName/test-results/unit"
+npm --prefix $RepoName run unit-test

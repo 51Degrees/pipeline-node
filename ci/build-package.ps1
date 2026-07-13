@@ -1,14 +1,28 @@
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName,
-    [Parameter(Mandatory=$true)]
-    [string]$Version
+    [Parameter(Mandatory)][string]$RepoName,
+    [Parameter(Mandatory)][string]$Version
 )
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
 
-$packages = "fiftyone.pipeline.cloudrequestengine", "fiftyone.pipeline.core", "fiftyone.pipeline.engines", "fiftyone.pipeline.engines.fiftyone", "fiftyone.pipeline.did", "fiftyone.pipeline.translation"
+# TODO: move everything below to common-ci after review
+$packageDir = New-Item -Force -ItemType directory -Path package
 
-$noRemote = "fiftyone.pipeline.core"
+Write-Host "Setting workspace versions to $Version"
+# Get the list of all direct package dependencies
+$deps = npm --prefix $RepoName pkg get --json --workspaces dependencies | ConvertFrom-Json -AsHashtable
+$pkgs = $deps.Keys # these are the packages that are members of the workspace
+foreach ($pkg in $deps.GetEnumerator()) {
+    foreach ($dep in $pkg.Value.GetEnumerator()) {
+        if ($dep.Key -in $pkgs) {
+            # If a dependency is a member of the workspace, set its version
+            Write-Host "Setting $($pkg.Key) dependency [$($dep.Key) -> $($Version)]"
+            npm --prefix $RepoName pkg set -w $pkg.Key "dependencies[$($dep.Key)]=$Version"
+        }
+    }
+}
+# This also does an npm install, which provides a basic sanity check
+npm --prefix $RepoName version --workspaces --allow-same-version $Version
 
-./node/build-package-npm.ps1 -RepoName $RepoName -Packages $packages -NoRemote $noRemote -Version $Version
-
-exit $LASTEXITCODE
+Write-Host "Packing packages"
+npm --prefix $RepoName pack --workspaces --pack-destination $packageDir

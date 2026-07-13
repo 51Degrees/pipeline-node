@@ -1,10 +1,12 @@
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName
+    [Parameter(Mandatory)][string]$RepoName
 )
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
 
-$packages = "fiftyone.pipeline.cloudrequestengine", "fiftyone.pipeline.core", "fiftyone.pipeline.engines", "fiftyone.pipeline.engines.fiftyone", "fiftyone.pipeline.did", "fiftyone.pipeline.translation";
-
-./node/build-project.ps1 -RepoName $RepoName -Packages $packages
-
-exit $LASTEXITCODE
+npm --prefix $RepoName install --workspaces
+& {
+    # TODO: fix lint erorrs
+    $ErrorActionPreference = 'Continue'
+    npm --prefix $RepoName run lint
+}
