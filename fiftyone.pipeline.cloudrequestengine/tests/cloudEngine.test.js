@@ -66,7 +66,7 @@ test('missing property service - invalid resource key', done => {
     let errorFound = false;
     const error = flowData.errors.CloudEngineBase[0];
     errorFound = error.message.includes(testResourceKey) &&
-    error.message.includes('is not a valid Resource Key');
+    error.message.includes('could not be read as a valid resource key');
     expect(errorFound).toBe(true);
 
     done();
