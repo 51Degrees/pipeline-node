@@ -20,7 +20,7 @@
  * such notice(s) shall fulfill the requirements of that article.
  * ********************************************************************* */
 
-const owid = require('owid');
+const Owid = require('owid');
 const { FodId, IdType } = require('../index');
 
 const VERSION = 2;
@@ -160,7 +160,7 @@ describe('FodId', () => {
   });
 
   test('fromOwid unpacks all three fields', () => {
-    const o = new owid(envelopeBase64(canonicalPayload()));
+    const o = new Owid(envelopeBase64(canonicalPayload()));
     const fod = FodId.fromOwid(o);
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
@@ -328,8 +328,8 @@ describe('FodId', () => {
     const fa = FodId.fromBase64(a);
     const fb = FodId.fromBase64(b);
 
-    expect(fa.hash).toEqual(fb.hash);            // value is stable
-    expect(fa.date).not.toBe(fb.date);           // envelope differs
+    expect(fa.hash).toEqual(fb.hash); // value is stable
+    expect(fa.date).not.toBe(fb.date); // envelope differs
     expect(fa.signature).not.toEqual(fb.signature);
     expect(a).not.toBe(b);
   });
@@ -346,7 +346,7 @@ describe('FodId', () => {
   test('fromOwid is decoupled from the source owid', () => {
     // Mutating the source owid after construction must not affect the FodId
     // (it holds an independent copy).
-    const o = new owid(envelopeBase64(canonicalPayload()));
+    const o = new Owid(envelopeBase64(canonicalPayload()));
     const fod = FodId.fromOwid(o);
     o.owid.payload = new Uint8Array(FodId.PAYLOAD_LENGTH); // mutate the source
     expect(fod.hash).toEqual(canonicalHash());
@@ -357,7 +357,7 @@ describe('FodId', () => {
   test('constructor is decoupled from the source owid', () => {
     // The constructor must copy the owid too, not just fromOwid - mutating the
     // source afterwards must not affect the FodId.
-    const o = new owid(envelopeBase64(canonicalPayload()));
+    const o = new Owid(envelopeBase64(canonicalPayload()));
     const fod = new FodId(o);
     o.owid.payload = new Uint8Array(FodId.PAYLOAD_LENGTH); // mutate the source
     expect(fod.hash).toEqual(canonicalHash());

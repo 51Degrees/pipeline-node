@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory)][string]$RepoName,
-    [Parameter(Mandatory)][string]$Keys,
+    [Parameter(Mandatory)][hashtable]$Keys,
     [Parameter(Mandatory)][boolean]$DryRun
 )
 $ErrorActionPreference = 'Stop'

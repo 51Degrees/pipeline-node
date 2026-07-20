@@ -15,12 +15,14 @@ the Node versions that we currently test against. The software may run fine agai
 but additional caution should be applied.
 
 ## Contents
-This repository contains 4 modules:
+This repository contains 6 modules:
 
 - [**fiftyone.pipeline.core**](/fiftyone.pipeline.core#readme.md) - Defines the essential components of the Pipeline API such as 'flow elements', 'flow data' and 'evidence'
 - [**fiftyone.pipeline.engines**](/fiftyone.pipeline.engines#readme.md) - Functionality for a specialized type of flow element called an engine.
 - [**fiftyone.pipeline.engines.fiftyone**](/fiftyone.pipeline.engines.fiftyone#readme.md) - Functionality specific to 51Degrees engines.
 - [**fiftyone.pipeline.cloudrequestengine**](/fiftyone.pipeline.cloudrequestengine#readme.md) - An engine used to make requests to the 51Degrees cloud service.
+- [**fiftyone.pipeline.did**](/fiftyone.pipeline.did#readme.md) - A reader for the 51Did identifier returned by the 51Degrees cloud service.
+- [**fiftyone.pipeline.translation**](/fiftyone.pipeline.translation#readme.md) - A flow element that translates property values from one element to another.
 
 ## Installation
 
@@ -31,12 +33,15 @@ npm install fiftyone.pipeline.core
 npm install fiftyone.pipeline.engines
 npm install fiftyone.pipeline.engines.fiftyone
 npm install fiftyone.pipeline.cloudrequestengine
+npm install fiftyone.pipeline.did
+npm install fiftyone.pipeline.translation
 ```
 
-They can also be installed from this repository by running:
+To work on them from this repository instead, install once from the root. The
+modules form an npm workspace, so this also links them to each other:
 
 ```
-npm install <path to module>
+npm install
 ```
 
 ## Examples
@@ -59,14 +64,17 @@ If you want examples that demonstrate how to use 51Degrees products such as devi
 | [caching.js](/fiftyone.pipeline.engines/examples/caching.js)                 | Demonstrates a custom cache that makes use of the result caching feature that engines provide. |
 
 ## Tests
-Most modules include some automated tests. To run these, make sure jest is installed:
+Most modules include some automated tests. They are run for the whole workspace
+from the repository root:
 
 ```
-npm install jest --global
+npm install
+npm run unit-test
 ```
 
-Then, navigate to the module directory and execute:
+The integration tests need a resource key in the `_51DEGREES_RESOURCE_KEY`
+environment variable:
 
 ```
-npm test
+npm run integration-test
 ```

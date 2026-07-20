@@ -1,10 +1,8 @@
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName
+    [Parameter(Mandatory)][string]$RepoName
 )
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
 
-$packages = "fiftyone.pipeline.cloudrequestengine", "fiftyone.pipeline.core", "fiftyone.pipeline.engines", "fiftyone.pipeline.engines.fiftyone", "fiftyone.pipeline.did", "fiftyone.pipeline.translation"
-
-./node/update-packages.ps1 -RepoName $RepoName -Packages $packages
-
-exit $LASTEXITCODE
+# TODO: move everything below to common-ci after review
+npm --prefix $RepoName update --save --workspaces --include-workspace-root

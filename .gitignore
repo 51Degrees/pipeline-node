@@ -104,7 +104,4 @@ public
 # DynamoDB Local files
 .dynamodb/
 
-# TODO: remove
-package-lock.json
-
 .vscode/

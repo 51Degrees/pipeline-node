@@ -4,9 +4,5 @@ param (
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
-npm --prefix $RepoName install --workspaces
-& {
-    # TODO: fix lint erorrs
-    $ErrorActionPreference = 'Continue'
-    npm --prefix $RepoName run lint
-}
+# TODO: move everything below to common-ci after review
+npm --prefix $RepoName run lint

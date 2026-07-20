@@ -20,7 +20,7 @@
  * such notice(s) shall fulfill the requirements of that article.
  * ********************************************************************* */
 
-const owid = require('owid');
+const Owid = require('owid');
 const IdType = require('./idType');
 
 /**
@@ -56,13 +56,13 @@ class FodId {
    * payload. The owid is **copied** (re-parsed from its base64), not aliased,
    * so a FodId can never desync from its envelope if the caller later mutates
    * the owid they passed in.
-   * @param {object} owidInstance an owid instance (from `new owid(base64)`)
+   * @param {object} owidInstance an owid instance (from `new Owid(base64)`)
    */
   constructor (owidInstance) {
     if (owidInstance === null || owidInstance === undefined) {
       throw new TypeError('owid must not be null or undefined');
     }
-    this._owid = new owid(owidInstance.data);
+    this._owid = new Owid(owidInstance.data);
     const payload = this._owid.owid.payload;
     const length = payload ? payload.length : 0;
     if (!payload || length < FodId.HEADER_LENGTH) {
@@ -107,7 +107,7 @@ class FodId {
     if (typeof base64 !== 'string') {
       throw new TypeError('base64 must be a string');
     }
-    return new FodId(new owid(base64));
+    return new FodId(new Owid(base64));
   }
 
   /**
@@ -119,7 +119,7 @@ class FodId {
     if (!(buffer instanceof Uint8Array)) {
       throw new TypeError('buffer must be a Uint8Array');
     }
-    return new FodId(new owid(Buffer.from(buffer).toString('base64')));
+    return new FodId(new Owid(Buffer.from(buffer).toString('base64')));
   }
 
   /**
