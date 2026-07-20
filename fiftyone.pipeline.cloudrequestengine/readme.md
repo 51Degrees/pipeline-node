@@ -26,16 +26,18 @@ npm install fiftyone.pipeline.cloudrequestengine
 
 ## Tests
 
-To run tests you will need to install the `jest` library.
+This module is part of the pipeline-node npm workspace, so its dependencies
+are installed once from the repository root:
 
 ```
-npm install jest --global
+npm install
 ```
 
-Then, navigate to the module directory and execute:
+The tests are run from the root as well:
 
 ```
-npm test
+npm run unit-test
+npm run integration-test
 ```
 
 The integration tests read the resource key from the aligned

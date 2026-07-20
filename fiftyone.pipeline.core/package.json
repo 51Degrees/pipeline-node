@@ -1,6 +1,6 @@
 {
   "name": "fiftyone.pipeline.core",
-  "version": "1.0.21",
+  "version": "4.5.0",
   "description": "Core library for the 51Degrees Pipeline API",
   "keywords": [
     "51degrees",

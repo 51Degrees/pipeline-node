@@ -37,8 +37,9 @@ as `PROBABILISTIC`.
 
 `FodId` builds on the OWID envelope library
 ([SWAN-community/owid-js](https://github.com/SWAN-community/owid-js)), consumed
-via the `51Degrees/owid-js` fork as a git submodule and a `file:` dependency
-(switch to the npm registry once published). owid-js is parse + verify only and
+via the `51Degrees/owid-js` fork, pulled straight from GitHub as
+`github:51Degrees/owid-js#main` (switch to the npm registry once published).
+owid-js is parse + verify only and
 exposes no instance `asBase64`, so `FodId` **composes** an owid instance, keeps
 the original base64 for `asBase64()`, and delegates the rest.
 
@@ -48,10 +49,12 @@ contacting a network endpoint.
 
 ## Install / build
 
+This module is part of the pipeline-node npm workspace, so both the install and
+the tests are run from the repository root:
+
 ```bash
-git submodule update --init   # fetches owid-js into ../owid-js
 npm install
-npm test
+npm run unit-test
 ```
 
 ## Usage

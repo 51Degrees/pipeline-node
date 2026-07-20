@@ -1,6 +1,6 @@
 {
   "name": "fiftyone.pipeline.translation",
-  "version": "1.0.21",
+  "version": "4.5.0",
   "description": "Translation flow element for the 51Degrees Pipeline API. Translates string based property values from one element to another using YAML translation files.",
   "keywords": [
     "51degrees",

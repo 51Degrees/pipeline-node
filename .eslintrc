@@ -15,10 +15,11 @@
         "SharedArrayBuffer": "readonly",
         "test": true,
         "jest": true,
-        "expect": true
+        "expect": true,
+        "describe": true
     },
     "parserOptions": {
-        "ecmaVersion": 2020
+        "ecmaVersion": 2022
     },
     "settings": {
         "jsdoc": {

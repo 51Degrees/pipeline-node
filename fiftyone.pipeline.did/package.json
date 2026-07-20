@@ -19,7 +19,7 @@
     "owid": "github:51Degrees/owid-js#main"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^27.5.1"
   },
   "jest": {
     "setupFiles": [

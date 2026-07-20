@@ -1,6 +1,6 @@
 {
   "name": "fiftyone.pipeline.cloudrequestengine",
-  "version": "1.0.21",
+  "version": "4.5.0",
   "description": "Cloud request engine for the 51Degrees Pipeline API",
   "keywords": [
     "51degrees",
@@ -18,16 +18,16 @@
     "test": "jest"
   },
   "author": "51Degrees Engineering <engineering@51degrees.com>",
-  "devDependencies": {
-    "@types/jest": "^27.5.2",
-    "@types/node": "^20.14.10",
-    "jest": "^27.5.1",
-    "jest-each": "^27.5.1",
-    "typescript": "^5.5.3"
-  },
   "dependencies": {
     "fiftyone.pipeline.core": "file:../fiftyone.pipeline.core",
     "fiftyone.pipeline.engines": "file:../fiftyone.pipeline.engines"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.5.2",
+    "@types/node": "^20.19.43",
+    "jest": "^27.5.1",
+    "jest-each": "^27.5.1",
+    "typescript": "^5.9.3"
   },
   "license": "EUPL-1.2",
   "bugs": {

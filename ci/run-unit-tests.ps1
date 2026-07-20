@@ -1,8 +1,2 @@
-param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName
-)
-
-./node/run-unit-tests.ps1 -RepoName $RepoName
-
-exit $LASTEXITCODE
+param ([Parameter(Mandatory)][string]$RepoName)
+./node/run-unit-tests.ps1 -RepoName:$RepoName
