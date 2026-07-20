@@ -1,1 +1,1 @@
-Write-Host "No performance tests"
+Write-Host 'No performance tests'

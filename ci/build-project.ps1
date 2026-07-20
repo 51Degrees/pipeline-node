@@ -1,8 +1,2 @@
-param (
-    [Parameter(Mandatory)][string]$RepoName
-)
-$ErrorActionPreference = 'Stop'
-$PSNativeCommandUseErrorActionPreference = $true
-
-# TODO: move everything below to common-ci after review
-npm --prefix $RepoName run lint
+param ([Parameter(Mandatory)][string]$RepoName)
+./node/build-workspace-projects.ps1 -RepoName:$RepoName
