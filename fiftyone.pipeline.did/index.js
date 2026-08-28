@@ -22,5 +22,28 @@
 
 const FodId = require('./fodId');
 const IdType = require('./idType');
+const {
+  DidClient,
+  RedeemResult,
+  ContextResult,
+  SignatureResult,
+  FactorResult,
+  SignatureReason,
+  DidClientError,
+  DidArgumentError,
+  DidNotSupportedError
+} = require('./didClient');
 
-module.exports = { FodId, IdType };
+module.exports = {
+  FodId,
+  IdType,
+  DidClient,
+  RedeemResult,
+  ContextResult,
+  SignatureResult,
+  FactorResult,
+  SignatureReason,
+  DidClientError,
+  DidArgumentError,
+  DidNotSupportedError
+};

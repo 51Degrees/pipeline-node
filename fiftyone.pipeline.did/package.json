@@ -10,6 +10,7 @@
     "pipeline"
   ],
   "main": "index.js",
+  "types": "types/index.d.ts",
   "scripts": {
     "test": "jest"
   },
@@ -19,7 +20,8 @@
     "owid": "github:51Degrees/owid-js#main"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "typescript": "^5.9.3"
   },
   "jest": {
     "setupFiles": [
