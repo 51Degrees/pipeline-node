@@ -172,9 +172,10 @@ export class DidClient {
      * the one the cloud signs, the payload must be at least the base length
      * for its type (a longer payload carries a creator context and is
      * accepted), and the signature must verify against the key in force at
-     * the identifier's date or, within fifteen minutes of a boundary, the
-     * neighbouring key. No earlier key is ever tried, so a key leaked from
-     * one period cannot sign an identifier dated in another.
+     * the identifier's date or, within a short tolerance either side of a
+     * period boundary, the neighbouring key. No earlier key is ever tried, so
+     * a key leaked from one period cannot sign an identifier dated in
+     * another.
      * @param {FodId | string} fodId the identifier, or its base64
      * @returns {Promise<boolean>} true when a candidate key verifies it
      */
@@ -235,32 +236,37 @@ export class DidClient {
      * list was not just fetched.
      * @param {Date} date the identifier's date
      * @returns {Promise<PublicKeyEntry[]>} the keys to select from
+     * @private
      */
-    _keysFor(date: Date): Promise<PublicKeyEntry[]>;
+    private _keysFor;
     /**
      * Whether the held list should be fetched again before selecting for the
      * date.
      * @param {PublicKeyEntry[]} keys the held list, oldest first
      * @param {Date} date the identifier's date
      * @returns {boolean} true to fetch again
+     * @private
      */
-    _needsRefetch(keys: PublicKeyEntry[], date: Date): boolean;
+    private _needsRefetch;
     /**
      * @returns {boolean} whether the held list is missing or over a day old
+     * @private
      */
-    _stale(): boolean;
+    private _stale;
     /**
      * Fetches the key list, sharing one request between concurrent callers.
      * @returns {Promise<PublicKeyEntry[]>} the fresh list
+     * @private
      */
-    _refresh(): Promise<PublicKeyEntry[]>;
+    private _refresh;
     /**
      * GET id/key/{resource} and read each entry's start and public key.
      * `startsAt` is read where present and `created` otherwise. Both are
      * supported start fields in key-list responses. `weekStart` is ignored.
      * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
+     * @private
      */
-    _fetchKeys(): Promise<PublicKeyEntry[]>;
+    private _fetchKeys;
 }
 /**
  * The typed answer to a redemption. Built from the cloud's JSON body, with
@@ -402,9 +408,8 @@ export class DidClientError extends Error {
     body: string;
 }
 /**
- * The cloud refused the request because the 51Did sent was not a valid
- * identifier (HTTP 400 with an `errors` list). The message carries the
- * cloud's own text.
+ * The 51Did argument is invalid, either when checked locally or refused by
+ * the cloud (HTTP 400 with an `errors` list).
  */
 export class DidArgumentError extends DidClientError {
 }

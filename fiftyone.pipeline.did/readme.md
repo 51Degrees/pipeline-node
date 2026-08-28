@@ -39,13 +39,10 @@ browser and connection it was created on) the four bytes at offset 1 hold an
 encrypted value that only 51Degrees can turn back into a licence identifier.
 `licenseId` is then the field's raw value and identifies nothing outside
 51Degrees. A payload longer than the minimum carries the creator context after
-the value, within the maximum length of a valid identifier.
-
-The complete serialized envelope of a valid 51Did is at most 136 bytes.
-`FodId.MAXIMUM_BYTE_LENGTH` exposes that boundary for callers that want to
-check raw input before parsing; every `FodId` construction path also enforces
-it and rejects a longer value for its length. This is a limit on the
-identifier itself, not on an HTTP response that happens to carry one.
+the value, and the reader accepts it as it accepts the base length. The lengths
+of a context section belong to the cloud, so the reader checks only the lower
+bound for the identifier type and leaves anything longer for the cloud to
+judge.
 
 ## OWID dependency
 
@@ -141,11 +138,11 @@ const fodId = FodId.fromBase64(fiftyOneDid);
 public keys from the cloud once, caches them for a day, and picks the key in
 force when the identifier was created, being the entry whose start is latest
 on or before the identifier's date (a key stays in force until the next one
-starts, and keys are published up to three months ahead). Within fifteen
-minutes of a boundary the neighbouring key is tried as well. No earlier key is
-ever tried, so a key leaked from one period cannot sign an identifier dated in
-another. The envelope version must be the one the cloud signs and the payload
-at least the base length for its type.
+starts, and keys are published up to three months ahead). Within a short
+tolerance either side of a period boundary the neighbouring key is tried as
+well. No earlier key is ever tried, so a key leaked from one period cannot sign
+an identifier dated in another. The envelope version must be the one the cloud
+signs and the payload at least the base length for its type.
 
 ```js
 const valid = await client.verifySignature(fodId);        // boolean

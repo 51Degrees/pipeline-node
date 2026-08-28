@@ -52,7 +52,15 @@ const KEY_LIST_MAX_AGE_MS = 24 * 60 * MINUTE_MS;
 /** The only envelope version the cloud signs and verifies. */
 const SUPPORTED_VERSION = 3;
 
-const MAXIMUM_BASE64_LENGTH = Math.ceil(FodId.MAXIMUM_BYTE_LENGTH / 3) * 4;
+/**
+ * The longest encoded identifier the client will look at. The figure is
+ * arbitrary and deliberately generous, far above anything the cloud issues,
+ * because its only job is to turn obviously malformed input away before the
+ * client decodes it, fetches a key or calls the cloud. It says nothing about
+ * how long a 51Did is, and a value under it is still left to the cloud to
+ * judge.
+ */
+const MAXIMUM_ENCODED_LENGTH = 4096;
 
 /**
  * The creator context outcome of a redemption, as the cloud reports it in
@@ -418,7 +426,6 @@ class DidClient {
    */
   async publicKeyFor (fodId) {
     const id = asFodId(fodId);
-    ensureIdentifierWithinMaximum(id);
     const date = dateOf(id);
     const keys = await this._keysFor(date);
     return inForceAt(keys, date);
@@ -427,11 +434,13 @@ class DidClient {
   /**
    * Verifies the identifier's signature offline against the published keys,
    * as the cloud's own verify endpoint does. The envelope version must be
-   * the one the cloud signs, the payload must be within the supported
-   * length for its type, and the signature must verify against the key in
-   * force at the identifier's date or, within fifteen minutes of a
-   * boundary, the neighbouring key. No earlier key is ever tried, so a key
-   * leaked from one period cannot sign an identifier dated in another.
+   * the one the cloud signs, the payload must be at least the base length
+   * for its type (a longer payload carries a creator context and is
+   * accepted), and the signature must verify against the key in force at
+   * the identifier's date or, within a short tolerance either side of a
+   * period boundary, the neighbouring key. No earlier key is ever tried, so
+   * a key leaked from one period cannot sign an identifier dated in
+   * another.
    * @param {FodId | string} fodId the identifier, or its base64
    * @returns {Promise<boolean>} true when a candidate key verifies it
    */
@@ -451,7 +460,7 @@ class DidClient {
     if (id.version !== SUPPORTED_VERSION) {
       return { valid: false, reason: SignatureReason.VERSION };
     }
-    if (!identifierWithinMaximum(id) || !payloadLengthValid(id)) {
+    if (!payloadLengthValid(id)) {
       return { valid: false, reason: SignatureReason.LENGTH };
     }
     const date = dateOf(id);
@@ -580,6 +589,7 @@ class DidClient {
    * list was not just fetched.
    * @param {Date} date the identifier's date
    * @returns {Promise<PublicKeyEntry[]>} the keys to select from
+   * @private
    */
   async _keysFor (date) {
     const fetchedBefore = this._fetchedAt;
@@ -596,6 +606,7 @@ class DidClient {
    * @param {PublicKeyEntry[]} keys the held list, oldest first
    * @param {Date} date the identifier's date
    * @returns {boolean} true to fetch again
+   * @private
    */
   _needsRefetch (keys, date) {
     if (inForceAt(keys, date) === null) {
@@ -610,6 +621,7 @@ class DidClient {
 
   /**
    * @returns {boolean} whether the held list is missing or over a day old
+   * @private
    */
   _stale () {
     return this._fetchedAt === null ||
@@ -619,6 +631,7 @@ class DidClient {
   /**
    * Fetches the key list, sharing one request between concurrent callers.
    * @returns {Promise<PublicKeyEntry[]>} the fresh list
+   * @private
    */
   _refresh () {
     if (this._pending === null) {
@@ -640,6 +653,7 @@ class DidClient {
    * `startsAt` is read where present and `created` otherwise. Both are
    * supported start fields in key-list responses. `weekStart` is ignored.
    * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
+   * @private
    */
   async _fetchKeys () {
     const url = this._endpoint + 'id/key/' +
@@ -677,7 +691,10 @@ class DidClient {
 }
 
 /**
- * The identifier as a FodId, parsing a base64 string where one was given.
+ * The identifier as a FodId, parsing a base64 string where one was given. A
+ * string the reader cannot parse is reported as a DidArgumentError, the same
+ * type the length guard and the cloud's own refusal use, so a caller
+ * matching on DidClientError catches every bad argument in one place.
  * @param {FodId | string} value an identifier or its base64
  * @returns {FodId} the identifier
  */
@@ -687,7 +704,12 @@ function asFodId (value) {
   }
   if (typeof value === 'string') {
     ensureEncodedLength(value);
-    return FodId.fromBase64(value);
+    try {
+      return FodId.fromBase64(value);
+    } catch (error) {
+      throw new DidArgumentError(
+        'The value could not be read as a 51Did. ' + error.message);
+    }
   }
   throw new TypeError('fodId must be a FodId or a base64 string');
 }
@@ -701,7 +723,6 @@ function asFodId (value) {
  */
 function identifierText (value) {
   if (value instanceof FodId) {
-    ensureIdentifierWithinMaximum(value);
     return value.asBase64Url();
   }
   if (typeof value === 'string' && value.length > 0) {
@@ -711,19 +732,16 @@ function identifierText (value) {
   throw new TypeError('fodId must be a FodId or a non-empty base64 string');
 }
 
+/**
+ * Turns away an encoded value too long to be worth decoding, before any
+ * work is done on it. Whitespace at either end is ignored, as the reader
+ * ignores it.
+ * @param {string} value the encoded identifier as the caller gave it
+ */
 function ensureEncodedLength (value) {
-  if (value.length > MAXIMUM_BASE64_LENGTH) {
-    throw new DidArgumentError('The value is larger than a 51Did can be.');
-  }
-}
-
-function identifierWithinMaximum (value) {
-  return value._hasValidLength();
-}
-
-function ensureIdentifierWithinMaximum (value) {
-  if (!identifierWithinMaximum(value)) {
-    throw new DidArgumentError('The value is larger than a 51Did can be.');
+  if (value.trim().length > MAXIMUM_ENCODED_LENGTH) {
+    throw new DidArgumentError(
+      'The value is longer than this client will read as a 51Did.');
   }
 }
 
@@ -739,8 +757,8 @@ function dateOf (fodId) {
 /**
  * Whether the payload is at least the base length for its type, being five
  * header bytes plus a 32 byte match key, or 16 for a Random identifier.
- * Anything beyond the base is accepted only within the supported envelope
- * size.
+ * Anything beyond the base is a creator context section, whose exact
+ * lengths belong to the cloud, so any longer payload is accepted here.
  * @param {FodId} fodId the identifier
  * @returns {boolean} whether the length is acceptable
  */

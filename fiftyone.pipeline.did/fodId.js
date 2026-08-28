@@ -23,8 +23,6 @@
 const owid = require('owid');
 const IdType = require('./idType');
 
-const MAXIMUM_PAYLOAD_LENGTH = 56;
-
 /**
  * A strongly typed reader for the 51Did (51Degrees Identifier) value returned
  * by the 51Degrees Cloud service.
@@ -52,8 +50,6 @@ class FodId {
   static GUID_LENGTH = 16;
   static RANDOM_PAYLOAD_LENGTH = 21;
   static PAYLOAD_LENGTH = 37;
-  /** Largest possible byte length of a serialized 51Did envelope. */
-  static MAXIMUM_BYTE_LENGTH = 136;
 
   /**
    * Promotes an already-parsed owid instance into a 51Did by unpacking its
@@ -61,22 +57,14 @@ class FodId {
    * so a FodId can never desync from its envelope if the caller later mutates
    * the owid they passed in.
    * @param {object} owidInstance an owid instance (from `new owid(base64)`)
-   * @throws {RangeError} when the envelope is too long to be a 51Did
    */
   constructor (owidInstance) {
     if (owidInstance === null || owidInstance === undefined) {
       throw new TypeError('owid must not be null or undefined');
     }
-    const byteLength = Buffer.from(owidInstance.data, 'base64').length;
-    if (byteLength > FodId.MAXIMUM_BYTE_LENGTH) {
-      throw FodId._tooLong(byteLength);
-    }
     this._owid = new owid(owidInstance.data);
     const payload = this._owid.owid.payload;
     const length = payload ? payload.length : 0;
-    if (length > MAXIMUM_PAYLOAD_LENGTH) {
-      throw FodId._payloadTooLong(length);
-    }
     if (!payload || length < FodId.HEADER_LENGTH) {
       throw new RangeError(
         `51Did payload must be at least ${FodId.HEADER_LENGTH} bytes; ` +
@@ -112,19 +100,21 @@ class FodId {
 
   /**
    * Restores a base64 string in either alphabet to the standard alphabet
-   * with padding, which is the only form the OWID library decodes. The
-   * URL-safe characters `-` and `_` become `+` and `/`, then padding is
-   * added where the length calls for it. A string already in the standard
-   * form comes back unchanged.
-   * @param {string} value base64 in the standard or URL-safe alphabet,
-   * with or without padding
+   * with padding, which is the only form the OWID library decodes. Leading
+   * and trailing whitespace is stripped first, so a value carried through a
+   * log line, a text field or a copy and paste with a stray newline still
+   * parses. The URL-safe characters `-` and `_` become `+` and `/`, then
+   * padding is added where the stripped length calls for it. A string
+   * already in the standard form comes back unchanged.
+   * @param {string} value base64 in the standard or URL-safe alphabet, with
+   * or without padding, and with or without surrounding whitespace
    * @returns {string} the same bytes in the standard alphabet with padding
    */
   static toStandardBase64 (value) {
     if (typeof value !== 'string') {
       throw new TypeError('value must be a string');
     }
-    let base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+    let base64 = value.trim().replace(/-/g, '+').replace(/_/g, '/');
     switch (base64.length % 4) {
       case 2: base64 += '=='; break;
       case 3: base64 += '='; break;
@@ -154,54 +144,24 @@ class FodId {
    * returns the standard alphabet with padding whichever form was given.
    * @param {string} base64 the envelope in either base64 alphabet
    * @returns {FodId} the parsed identifier
-   * @throws {RangeError} when the decoded envelope is too long to be a 51Did
    */
   static fromBase64 (base64) {
     if (typeof base64 !== 'string') {
       throw new TypeError('base64 must be a string');
     }
-    const standard = FodId.toStandardBase64(base64);
-    const maximumBase64Length =
-      Math.ceil(FodId.MAXIMUM_BYTE_LENGTH / 3) * 4;
-    if (standard.length > maximumBase64Length) {
-      throw FodId._tooLong();
-    }
-    return new FodId(new owid(standard));
+    return new FodId(new owid(FodId.toStandardBase64(base64)));
   }
 
   /**
    * Parses a 51Did from the raw bytes of an OWID envelope.
    * @param {Uint8Array} buffer
    * @returns {FodId}
-   * @throws {RangeError} when the buffer is too long to be a 51Did
    */
   static fromByteArray (buffer) {
     if (!(buffer instanceof Uint8Array)) {
       throw new TypeError('buffer must be a Uint8Array');
     }
-    if (buffer.length > FodId.MAXIMUM_BYTE_LENGTH) {
-      throw FodId._tooLong(buffer.length);
-    }
     return new FodId(new owid(Buffer.from(buffer).toString('base64')));
-  }
-
-  static _tooLong (actual) {
-    const detail = actual === undefined ? '' : `; got ${actual}`;
-    return new RangeError(
-      `A 51Did must not exceed ${FodId.MAXIMUM_BYTE_LENGTH} bytes${detail}.`);
-  }
-
-  static _payloadTooLong (actual) {
-    return new RangeError(
-      `A 51Did payload must not exceed ${MAXIMUM_PAYLOAD_LENGTH} bytes; ` +
-      `got ${actual}.`);
-  }
-
-  /** @private Internal defensive check used by DidClient. */
-  _hasValidLength () {
-    return this.payload.length <= MAXIMUM_PAYLOAD_LENGTH &&
-      this.signature.length === 64 &&
-      this.asByteArray().length <= FodId.MAXIMUM_BYTE_LENGTH;
   }
 
   /**
@@ -211,7 +171,6 @@ class FodId {
    * owid it passed in.
    * @param {object} owidInstance
    * @returns {FodId}
-   * @throws {RangeError} when the envelope is too long to be a 51Did
    */
   static fromOwid (owidInstance) {
     if (owidInstance === null || owidInstance === undefined) {

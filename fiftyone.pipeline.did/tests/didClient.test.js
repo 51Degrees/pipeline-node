@@ -50,11 +50,9 @@ const USER_AGENT = 'fiftyone.pipeline.did/' +
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-const MAXIMUM_PAYLOAD_LENGTH = 56;
-const MAXIMUM_BYTE_LENGTH = 136;
-const MAXIMUM_BASE64_LENGTH = 184;
-const MAXIMUM_BASE64_URL_LENGTH = 182;
-const MAXIMUM_TEST_DOMAIN = '51d.es';
+// Far longer than any identifier the cloud issues, so the client's guard
+// against obviously malformed input turns it away before it does any work.
+const OVER_LONG = 'A'.repeat(8192);
 
 // Three weekly periods, Monday to Monday, as the cloud's generator writes.
 const START_1 = new Date('2026-08-03T00:00:00Z');
@@ -125,28 +123,6 @@ async function signedAt (pair, at, options = {}) {
       version: options.version,
       domain: options.domain
     }));
-}
-
-function maximumPayload () {
-  const payload = new Uint8Array(MAXIMUM_PAYLOAD_LENGTH);
-  payload.set(canonicalPayload());
-  return payload;
-}
-
-function oversizedPayload () {
-  const payload = new Uint8Array(MAXIMUM_PAYLOAD_LENGTH + 1);
-  payload.set(maximumPayload());
-  return payload;
-}
-
-function maximumFodId () {
-  return FodId.fromBase64(envelopeBase64(
-    maximumPayload(), { version: 3, domain: MAXIMUM_TEST_DOMAIN }));
-}
-
-function oversizedFodId () {
-  return FodId.fromBase64(envelopeBase64(
-    oversizedPayload(), { version: 3, domain: MAXIMUM_TEST_DOMAIN }));
 }
 
 describe('DidClient construction', () => {
@@ -274,9 +250,10 @@ describe('DidClient publicKeyFor', () => {
     expect(key.publicKey).toBe(pems[0]);
   });
 
-  test('refuses an oversized object before a key fetch', async () => {
+  test('refuses an over-long encoded value before a key fetch', async () => {
     const { client, fetch } = keyClient([]);
-    expect(() => oversizedFodId()).toThrow(RangeError);
+    await expect(client.publicKeyFor(OVER_LONG))
+      .rejects.toBeInstanceOf(DidArgumentError);
     expect(fetch.calls).toHaveLength(0);
   });
 
@@ -453,25 +430,43 @@ describe('DidClient verifySignature', () => {
     await expect(client.verifySignature(fod)).resolves.toBe(true);
   });
 
-  test('true for the maximum supported payload', async () => {
+  test('true for a payload longer than the base (a context section)', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
+    const withContext = new Uint8Array(FodId.PAYLOAD_LENGTH + 40);
+    withContext.set(canonicalPayload());
+    withContext.fill(0x5A, FodId.PAYLOAD_LENGTH);
     const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY), {
-      payload: maximumPayload(),
-      domain: MAXIMUM_TEST_DOMAIN
+      payload: withContext
     });
     await expect(client.verifySignature(fod)).resolves.toBe(true);
   });
 
-  test('an oversized object is refused before a key fetch', async () => {
+  test('true for a long context section and a long creator domain', async () => {
+    const { pairs, json } = await schedule();
+    const { client } = keyClient(json);
+    const withContext = new Uint8Array(FodId.PAYLOAD_LENGTH + 200);
+    withContext.set(canonicalPayload());
+    withContext.fill(0x5A, FodId.PAYLOAD_LENGTH);
+    const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY), {
+      payload: withContext,
+      domain: 'a-self-hosted-container.example.internal.51degrees.com'
+    });
+    await expect(client.verifySignature(fod)).resolves.toBe(true);
+  });
+
+  test('an over-long encoded value is refused before parsing or a key fetch', async () => {
     const { client, fetch } = keyClient([]);
-    expect(() => oversizedFodId()).toThrow(RangeError);
+    await expect(client.verifySignatureDetailed(OVER_LONG))
+      .rejects.toBeInstanceOf(DidArgumentError);
+    await expect(client.verifySignature(OVER_LONG))
+      .rejects.toBeInstanceOf(DidArgumentError);
     expect(fetch.calls).toHaveLength(0);
   });
 
-  test('an oversized string is refused before parsing or a key fetch', async () => {
+  test('a string that is not a 51Did is refused as an argument', async () => {
     const { client, fetch } = keyClient([]);
-    await expect(client.verifySignature('A'.repeat(MAXIMUM_BASE64_LENGTH + 1)))
+    await expect(client.verifySignature('This is not valid Base64!@#'))
       .rejects.toBeInstanceOf(DidArgumentError);
     expect(fetch.calls).toHaveLength(0);
   });
@@ -512,29 +507,18 @@ describe('DidClient verify (cloud)', () => {
       encodeURIComponent(fod.asBase64()));
   });
 
-  test('maximum padded, unpadded and object forms are accepted', async () => {
+  test('padded, unpadded and object forms are all accepted', async () => {
     const { client, fetch } = verifyClient(200, { valid: true });
-    const maximum = maximumFodId();
-    expect(maximum.asByteArray()).toHaveLength(MAXIMUM_BYTE_LENGTH);
-    expect(maximum.asBase64()).toHaveLength(MAXIMUM_BASE64_LENGTH);
-    expect(maximum.asBase64Url()).toHaveLength(MAXIMUM_BASE64_URL_LENGTH);
-
-    await expect(client.verify(maximum.asBase64())).resolves.toBe(true);
-    await expect(client.verify(maximum.asBase64Url())).resolves.toBe(true);
-    await expect(client.verify(maximum)).resolves.toBe(true);
+    await expect(client.verify(fod.asBase64())).resolves.toBe(true);
+    await expect(client.verify(fod.asBase64Url())).resolves.toBe(true);
+    await expect(client.verify(fod)).resolves.toBe(true);
     expect(fetch.calls).toHaveLength(3);
   });
 
-  test('an oversized string is refused before transport', async () => {
+  test('an over-long encoded value is refused before transport', async () => {
     const { client, fetch } = verifyClient(200, { valid: true });
-    await expect(client.verify('A'.repeat(MAXIMUM_BASE64_LENGTH + 1)))
+    await expect(client.verify(OVER_LONG))
       .rejects.toBeInstanceOf(DidArgumentError);
-    expect(fetch.calls).toHaveLength(0);
-  });
-
-  test('an oversized object is refused before transport', async () => {
-    const { client, fetch } = verifyClient(200, { valid: true });
-    expect(() => oversizedFodId()).toThrow(RangeError);
     expect(fetch.calls).toHaveLength(0);
   });
 
@@ -630,12 +614,10 @@ describe('DidClient redeem', () => {
     expect(form.get('51did')).toBe(fod.asBase64());
   });
 
-  test('oversized inputs are refused before transport', async () => {
+  test('an over-long encoded value is refused before transport', async () => {
     const { client, fetch } = redeemClient(200, { context: 'unreadable' });
-    await expect(client.redeem(
-      'A'.repeat(MAXIMUM_BASE64_LENGTH + 1), RESULT, CHALLENGE))
+    await expect(client.redeem(OVER_LONG, RESULT, CHALLENGE))
       .rejects.toBeInstanceOf(DidArgumentError);
-    expect(() => oversizedFodId()).toThrow(RangeError);
     expect(fetch.calls).toHaveLength(0);
   });
 

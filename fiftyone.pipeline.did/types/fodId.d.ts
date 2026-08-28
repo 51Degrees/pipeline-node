@@ -26,16 +26,16 @@ declare class FodId {
     static GUID_LENGTH: number;
     static RANDOM_PAYLOAD_LENGTH: number;
     static PAYLOAD_LENGTH: number;
-    /** Largest possible byte length of a serialized 51Did envelope. */
-    static MAXIMUM_BYTE_LENGTH: number;
     /**
      * Restores a base64 string in either alphabet to the standard alphabet
-     * with padding, which is the only form the OWID library decodes. The
-     * URL-safe characters `-` and `_` become `+` and `/`, then padding is
-     * added where the length calls for it. A string already in the standard
-     * form comes back unchanged.
-     * @param {string} value base64 in the standard or URL-safe alphabet,
-     * with or without padding
+     * with padding, which is the only form the OWID library decodes. Leading
+     * and trailing whitespace is stripped first, so a value carried through a
+     * log line, a text field or a copy and paste with a stray newline still
+     * parses. The URL-safe characters `-` and `_` become `+` and `/`, then
+     * padding is added where the stripped length calls for it. A string
+     * already in the standard form comes back unchanged.
+     * @param {string} value base64 in the standard or URL-safe alphabet, with
+     * or without padding, and with or without surrounding whitespace
      * @returns {string} the same bytes in the standard alphabet with padding
      */
     static toStandardBase64(value: string): string;

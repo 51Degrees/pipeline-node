@@ -46,7 +46,6 @@ describe('FodId', () => {
       .toBe(FodId.HASH_OFFSET);
     expect(FodId.HASH_OFFSET + FodId.GUID_LENGTH)
       .toBe(FodId.RANDOM_PAYLOAD_LENGTH);
-    expect(FodId.MAXIMUM_BYTE_LENGTH).toBe(136);
   });
 
   test('exposes OWID-level fields', () => {
@@ -150,45 +149,54 @@ describe('FodId', () => {
     expect(() => FodId.fromBase64('This is not valid Base64!@#$')).toThrow();
   });
 
-  test('maximum-length identifier uses first 37 payload bytes', () => {
-    const p = new Uint8Array(56);
+  test('payload larger than spec uses first 37 bytes', () => {
+    const p = new Uint8Array(64);
     p.set(canonicalPayload());
     p.fill(0xCC, FodId.PAYLOAD_LENGTH);
-    const bytes = envelopeBytes(p, { domain: '51d.es' });
-    expect(bytes).toHaveLength(FodId.MAXIMUM_BYTE_LENGTH);
-    const fod = FodId.fromByteArray(bytes);
+    const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.hash).toEqual(canonicalHash());
     expect(fod.hash.length).toBe(FodId.HASH_LENGTH);
   });
 
-  test('one byte beyond maximum throws for every input form', () => {
-    const p = new Uint8Array(57);
+  test('a long context section and a long creator domain both parse', () => {
+    // The creator domain is a deployment parameter, so a self-hosted
+    // container may sign with a longer one, and a context section of a
+    // version this reader does not implement may be longer still. Both
+    // must parse and leave the judgement to the cloud.
+    const p = new Uint8Array(FodId.PAYLOAD_LENGTH + 400);
     p.set(canonicalPayload());
     p.fill(0xCC, FodId.PAYLOAD_LENGTH);
-    const bytes = envelopeBytes(p, { domain: '51d.es' });
+    const bytes = envelopeBytes(p, {
+      domain: 'a-self-hosted-container.example.internal.51degrees.com'
+    });
     const encoded = Buffer.from(bytes).toString('base64');
-    expect(bytes).toHaveLength(FodId.MAXIMUM_BYTE_LENGTH + 1);
 
-    expect(() => FodId.fromBase64(encoded)).toThrow(RangeError);
-    expect(() => FodId.fromByteArray(bytes)).toThrow(RangeError);
-    expect(() => FodId.fromOwid(new owid(encoded))).toThrow(RangeError);
+    for (const fod of [
+      FodId.fromBase64(encoded),
+      FodId.fromByteArray(bytes),
+      FodId.fromOwid(new owid(encoded))
+    ]) {
+      expect(fod.flags).toBe(CANONICAL_FLAGS);
+      expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
+      expect(fod.hash).toEqual(canonicalHash());
+      expect(fod.payload).toHaveLength(p.length);
+    }
   });
 
-  test('oversized payload in a short envelope explains the payload limit', () => {
-    const p = new Uint8Array(57);
-    p.set(canonicalPayload());
-    const bytes = envelopeBytes(p, { domain: 'x' });
-    const encoded = Buffer.from(bytes).toString('base64');
-    expect(bytes.length).toBeLessThanOrEqual(FodId.MAXIMUM_BYTE_LENGTH);
-
-    for (const construct of [
-      () => FodId.fromBase64(encoded),
-      () => FodId.fromByteArray(bytes),
-      () => FodId.fromOwid(new owid(encoded))
+  test('surrounding whitespace parses to the same value', () => {
+    const clean = envelopeBase64(canonicalPayload());
+    const expected = FodId.fromBase64(clean);
+    for (const spaced of [
+      clean + '\n', ' ' + clean, clean + ' ', ' \r\n\t' + clean + ' \r\n\t',
+      FodId.toBase64Url(clean) + '\n', ' ' + FodId.toBase64Url(clean) + ' '
     ]) {
-      expect(construct).toThrow(/payload must not exceed 56 bytes/i);
+      const fod = FodId.fromBase64(spaced);
+      expect(fod.asBase64()).toBe(expected.asBase64());
+      expect(fod.hash).toEqual(expected.hash);
+      expect(fod.licenseId).toBe(expected.licenseId);
+      expect(fod.flags).toBe(expected.flags);
     }
   });
 
