@@ -42,3 +42,23 @@ The integration tests read the resource key from the aligned
 `_51DEGREES_RESOURCE_KEY` environment variable first, then the legacy
 `RESOURCE_KEY` variable.
 
+## Pointing the engine at another host
+
+The engine calls `https://cloud.51degrees.com/api/v4/` unless the `baseURL`
+option is given or the `FOD_CLOUD_API_URL` environment variable is set, in
+which case that value is the API base including the `/api/v4/` segment (a
+missing trailing slash is added). Every engine and example built on this
+package, in this repository and in the device detection and geolocation
+packages, inherits that choice, so setting the variable once points all of
+them at the same place.
+
+A host other than `cloud.51degrees.com` would be used to (a) use an on
+premise web server, or (b) use a privately hosted version of the 51Degrees
+cloud for performance reasons. This is the private hosting option of the
+51Degrees cloud service. Both run the same service, so an example works
+unchanged.
+
+```bash
+FOD_CLOUD_API_URL=https://cloud.example.com/api/v4/ _51DEGREES_RESOURCE_KEY=<resource key> node yourExample.js
+```
+
