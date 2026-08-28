@@ -276,8 +276,7 @@ describe('DidClient publicKeyFor', () => {
 
   test('refuses an oversized object before a key fetch', async () => {
     const { client, fetch } = keyClient([]);
-    await expect(client.publicKeyFor(oversizedFodId()))
-      .rejects.toBeInstanceOf(DidArgumentError);
+    expect(() => oversizedFodId()).toThrow(RangeError);
     expect(fetch.calls).toHaveLength(0);
   });
 
@@ -466,11 +465,7 @@ describe('DidClient verifySignature', () => {
 
   test('an oversized object is refused before a key fetch', async () => {
     const { client, fetch } = keyClient([]);
-    const fod = oversizedFodId();
-    await expect(client.verifySignatureDetailed(fod)).resolves.toEqual({
-      valid: false, reason: SignatureReason.LENGTH
-    });
-    await expect(client.verifySignature(fod)).resolves.toBe(false);
+    expect(() => oversizedFodId()).toThrow(RangeError);
     expect(fetch.calls).toHaveLength(0);
   });
 
@@ -539,8 +534,7 @@ describe('DidClient verify (cloud)', () => {
 
   test('an oversized object is refused before transport', async () => {
     const { client, fetch } = verifyClient(200, { valid: true });
-    await expect(client.verify(oversizedFodId()))
-      .rejects.toBeInstanceOf(DidArgumentError);
+    expect(() => oversizedFodId()).toThrow(RangeError);
     expect(fetch.calls).toHaveLength(0);
   });
 
@@ -641,8 +635,7 @@ describe('DidClient redeem', () => {
     await expect(client.redeem(
       'A'.repeat(MAXIMUM_BASE64_LENGTH + 1), RESULT, CHALLENGE))
       .rejects.toBeInstanceOf(DidArgumentError);
-    await expect(client.redeem(oversizedFodId(), RESULT, CHALLENGE))
-      .rejects.toBeInstanceOf(DidArgumentError);
+    expect(() => oversizedFodId()).toThrow(RangeError);
     expect(fetch.calls).toHaveLength(0);
   });
 

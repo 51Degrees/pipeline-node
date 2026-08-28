@@ -46,6 +46,7 @@ describe('FodId', () => {
       .toBe(FodId.HASH_OFFSET);
     expect(FodId.HASH_OFFSET + FodId.GUID_LENGTH)
       .toBe(FodId.RANDOM_PAYLOAD_LENGTH);
+    expect(FodId.MAXIMUM_BYTE_LENGTH).toBe(136);
   });
 
   test('exposes OWID-level fields', () => {
@@ -149,15 +150,46 @@ describe('FodId', () => {
     expect(() => FodId.fromBase64('This is not valid Base64!@#$')).toThrow();
   });
 
-  test('payload larger than spec uses first 37 bytes', () => {
-    const p = new Uint8Array(64);
+  test('maximum-length identifier uses first 37 payload bytes', () => {
+    const p = new Uint8Array(56);
     p.set(canonicalPayload());
     p.fill(0xCC, FodId.PAYLOAD_LENGTH);
-    const fod = FodId.fromBase64(envelopeBase64(p));
+    const bytes = envelopeBytes(p, { domain: '51d.es' });
+    expect(bytes).toHaveLength(FodId.MAXIMUM_BYTE_LENGTH);
+    const fod = FodId.fromByteArray(bytes);
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.hash).toEqual(canonicalHash());
     expect(fod.hash.length).toBe(FodId.HASH_LENGTH);
+  });
+
+  test('one byte beyond maximum throws for every input form', () => {
+    const p = new Uint8Array(57);
+    p.set(canonicalPayload());
+    p.fill(0xCC, FodId.PAYLOAD_LENGTH);
+    const bytes = envelopeBytes(p, { domain: '51d.es' });
+    const encoded = Buffer.from(bytes).toString('base64');
+    expect(bytes).toHaveLength(FodId.MAXIMUM_BYTE_LENGTH + 1);
+
+    expect(() => FodId.fromBase64(encoded)).toThrow(RangeError);
+    expect(() => FodId.fromByteArray(bytes)).toThrow(RangeError);
+    expect(() => FodId.fromOwid(new owid(encoded))).toThrow(RangeError);
+  });
+
+  test('oversized payload in a short envelope explains the payload limit', () => {
+    const p = new Uint8Array(57);
+    p.set(canonicalPayload());
+    const bytes = envelopeBytes(p, { domain: 'x' });
+    const encoded = Buffer.from(bytes).toString('base64');
+    expect(bytes.length).toBeLessThanOrEqual(FodId.MAXIMUM_BYTE_LENGTH);
+
+    for (const construct of [
+      () => FodId.fromBase64(encoded),
+      () => FodId.fromByteArray(bytes),
+      () => FodId.fromOwid(new owid(encoded))
+    ]) {
+      expect(construct).toThrow(/payload must not exceed 56 bytes/i);
+    }
   });
 
   test('is cryptographically verifiable', async () => {

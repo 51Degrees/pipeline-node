@@ -52,9 +52,7 @@ const KEY_LIST_MAX_AGE_MS = 24 * 60 * MINUTE_MS;
 /** The only envelope version the cloud signs and verifies. */
 const SUPPORTED_VERSION = 3;
 
-const MAXIMUM_PAYLOAD_LENGTH = 56;
-const MAXIMUM_BYTE_LENGTH = 136;
-const MAXIMUM_BASE64_LENGTH = 184;
+const MAXIMUM_BASE64_LENGTH = Math.ceil(FodId.MAXIMUM_BYTE_LENGTH / 3) * 4;
 
 /**
  * The creator context outcome of a redemption, as the cloud reports it in
@@ -720,12 +718,7 @@ function ensureEncodedLength (value) {
 }
 
 function identifierWithinMaximum (value) {
-  if (value.payload.length > MAXIMUM_PAYLOAD_LENGTH ||
-    value.domain.length > MAXIMUM_BYTE_LENGTH ||
-    value.signature.length !== 64) {
-    return false;
-  }
-  return value.asByteArray().length <= MAXIMUM_BYTE_LENGTH;
+  return value._hasValidLength();
 }
 
 function ensureIdentifierWithinMaximum (value) {

@@ -26,6 +26,8 @@ declare class FodId {
     static GUID_LENGTH: number;
     static RANDOM_PAYLOAD_LENGTH: number;
     static PAYLOAD_LENGTH: number;
+    /** Largest possible byte length of a serialized 51Did envelope. */
+    static MAXIMUM_BYTE_LENGTH: number;
     /**
      * Restores a base64 string in either alphabet to the standard alphabet
      * with padding, which is the only form the OWID library decodes. The
