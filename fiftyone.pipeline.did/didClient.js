@@ -52,6 +52,10 @@ const KEY_LIST_MAX_AGE_MS = 24 * 60 * MINUTE_MS;
 /** The only envelope version the cloud signs and verifies. */
 const SUPPORTED_VERSION = 3;
 
+const MAXIMUM_PAYLOAD_LENGTH = 56;
+const MAXIMUM_BYTE_LENGTH = 136;
+const MAXIMUM_BASE64_LENGTH = 184;
+
 /**
  * The creator context outcome of a redemption, as the cloud reports it in
  * the `context` field. The values are the cloud's own strings, so a result
@@ -139,14 +143,13 @@ class DidClientError extends Error {
 }
 
 /**
- * The cloud refused the request because the 51Did sent was not a valid
- * identifier (HTTP 400 with an `errors` list). The message carries the
- * cloud's own text.
+ * The 51Did argument is invalid, either when checked locally or refused by
+ * the cloud (HTTP 400 with an `errors` list).
  */
 class DidArgumentError extends DidClientError {
   /**
-   * Builds the error from the cloud's errors text.
-   * @param {string} message the cloud's errors text
+   * Builds the error from the validation message.
+   * @param {string} message the validation message
    * @param {number} [statusCode] the HTTP status
    * @param {string} [body] the response body
    */
@@ -416,7 +419,9 @@ class DidClient {
    * date precedes every published key
    */
   async publicKeyFor (fodId) {
-    const date = dateOf(asFodId(fodId));
+    const id = asFodId(fodId);
+    ensureIdentifierWithinMaximum(id);
+    const date = dateOf(id);
     const keys = await this._keysFor(date);
     return inForceAt(keys, date);
   }
@@ -424,12 +429,11 @@ class DidClient {
   /**
    * Verifies the identifier's signature offline against the published keys,
    * as the cloud's own verify endpoint does. The envelope version must be
-   * the one the cloud signs, the payload must be at least the base length
-   * for its type (a longer payload carries a creator context and is
-   * accepted), and the signature must verify against the key in force at
-   * the identifier's date or, within fifteen minutes of a boundary, the
-   * neighbouring key. No earlier key is ever tried, so a key leaked from
-   * one period cannot sign an identifier dated in another.
+   * the one the cloud signs, the payload must be within the supported
+   * length for its type, and the signature must verify against the key in
+   * force at the identifier's date or, within fifteen minutes of a
+   * boundary, the neighbouring key. No earlier key is ever tried, so a key
+   * leaked from one period cannot sign an identifier dated in another.
    * @param {FodId | string} fodId the identifier, or its base64
    * @returns {Promise<boolean>} true when a candidate key verifies it
    */
@@ -449,7 +453,7 @@ class DidClient {
     if (id.version !== SUPPORTED_VERSION) {
       return { valid: false, reason: SignatureReason.VERSION };
     }
-    if (!payloadLengthValid(id)) {
+    if (!identifierWithinMaximum(id) || !payloadLengthValid(id)) {
       return { valid: false, reason: SignatureReason.LENGTH };
     }
     const date = dateOf(id);
@@ -684,6 +688,7 @@ function asFodId (value) {
     return value;
   }
   if (typeof value === 'string') {
+    ensureEncodedLength(value);
     return FodId.fromBase64(value);
   }
   throw new TypeError('fodId must be a FodId or a base64 string');
@@ -698,12 +703,35 @@ function asFodId (value) {
  */
 function identifierText (value) {
   if (value instanceof FodId) {
+    ensureIdentifierWithinMaximum(value);
     return value.asBase64Url();
   }
   if (typeof value === 'string' && value.length > 0) {
+    ensureEncodedLength(value);
     return value;
   }
   throw new TypeError('fodId must be a FodId or a non-empty base64 string');
+}
+
+function ensureEncodedLength (value) {
+  if (value.length > MAXIMUM_BASE64_LENGTH) {
+    throw new DidArgumentError('The value is larger than a 51Did can be.');
+  }
+}
+
+function identifierWithinMaximum (value) {
+  if (value.payload.length > MAXIMUM_PAYLOAD_LENGTH ||
+    value.domain.length > MAXIMUM_BYTE_LENGTH ||
+    value.signature.length !== 64) {
+    return false;
+  }
+  return value.asByteArray().length <= MAXIMUM_BYTE_LENGTH;
+}
+
+function ensureIdentifierWithinMaximum (value) {
+  if (!identifierWithinMaximum(value)) {
+    throw new DidArgumentError('The value is larger than a 51Did can be.');
+  }
 }
 
 /**
@@ -718,8 +746,8 @@ function dateOf (fodId) {
 /**
  * Whether the payload is at least the base length for its type, being five
  * header bytes plus a 32 byte match key, or 16 for a Random identifier.
- * Anything beyond the base is a creator context section, whose exact
- * lengths belong to the cloud, so any longer payload is accepted here.
+ * Anything beyond the base is accepted only within the supported envelope
+ * size.
  * @param {FodId} fodId the identifier
  * @returns {boolean} whether the length is acceptable
  */

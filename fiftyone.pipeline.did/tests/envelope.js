@@ -73,9 +73,9 @@ function uint32LE (v) {
 }
 
 // The bytes the signature covers: everything before the signature.
-function noSigBytes (payload, date, version = VERSION) {
+function noSigBytes (payload, date, version = VERSION, domain = DOMAIN) {
   const out = [version];
-  for (let i = 0; i < DOMAIN.length; i++) { out.push(DOMAIN.charCodeAt(i)); }
+  for (let i = 0; i < domain.length; i++) { out.push(domain.charCodeAt(i)); }
   out.push(0);
   out.push(...uint32LE(date));
   out.push(...uint32LE(payload.length));
@@ -90,9 +90,9 @@ const DUMMY_SIG = (() => {
 })();
 
 function envelopeBytes (payload, {
-  date = DATE, signature = DUMMY_SIG, version = VERSION
+  date = DATE, signature = DUMMY_SIG, version = VERSION, domain = DOMAIN
 } = {}) {
-  const noSig = noSigBytes(payload, date, version);
+  const noSig = noSigBytes(payload, date, version, domain);
   const full = new Uint8Array(noSig.length + signature.length);
   full.set(noSig);
   full.set(signature, noSig.length);
@@ -121,9 +121,9 @@ async function publicPemOf (keyPair) {
 
 // An envelope signed with the given key pair, as base64.
 async function signedWith (keyPair, payload, {
-  date = DATE, version = SIGNED_VERSION
+  date = DATE, version = SIGNED_VERSION, domain = DOMAIN
 } = {}) {
-  const noSig = noSigBytes(payload, date, version);
+  const noSig = noSigBytes(payload, date, version, domain);
   const sig = new Uint8Array(await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' }, keyPair.privateKey, noSig));
   const full = new Uint8Array(noSig.length + sig.length);
