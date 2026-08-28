@@ -333,7 +333,7 @@ describe('DidClient verifySignature', () => {
     await expect(client.verifySignature(fod.asBase64Url())).resolves.toBe(true);
   });
 
-  test('true with the earlier neighbour within fifteen minutes after a boundary', async () => {
+  test('true with the earlier neighbour just after a boundary', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
     const fod = await signedAt(pairs[0], new Date(START_2.getTime() + 5 * MINUTE));
@@ -349,7 +349,7 @@ describe('DidClient verifySignature', () => {
     });
   });
 
-  test('true with the later neighbour within fifteen minutes before a boundary', async () => {
+  test('true with the later neighbour just before a boundary', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
     const fod = await signedAt(pairs[2], new Date(START_3.getTime() - 5 * MINUTE));
