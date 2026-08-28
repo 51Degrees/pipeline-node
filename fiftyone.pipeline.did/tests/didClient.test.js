@@ -333,17 +333,21 @@ describe('DidClient verifySignature', () => {
     await expect(client.verifySignature(fod.asBase64Url())).resolves.toBe(true);
   });
 
+  // The dates either side of a boundary sit well clear of the allowance the
+  // client applies, a minute out where the neighbouring key must still be
+  // tried and an hour out where it must not, so these tests show the rule
+  // holds without recording how wide the allowance is.
   test('true with the earlier neighbour just after a boundary', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const fod = await signedAt(pairs[0], new Date(START_2.getTime() + 5 * MINUTE));
+    const fod = await signedAt(pairs[0], new Date(START_2.getTime() + MINUTE));
     await expect(client.verifySignature(fod)).resolves.toBe(true);
   });
 
   test('false with the earlier key beyond the tolerance', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const fod = await signedAt(pairs[0], new Date(START_2.getTime() + 16 * MINUTE));
+    const fod = await signedAt(pairs[0], new Date(START_2.getTime() + HOUR));
     await expect(client.verifySignatureDetailed(fod)).resolves.toEqual({
       valid: false, reason: SignatureReason.SIGNATURE
     });
@@ -352,14 +356,14 @@ describe('DidClient verifySignature', () => {
   test('true with the later neighbour just before a boundary', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const fod = await signedAt(pairs[2], new Date(START_3.getTime() - 5 * MINUTE));
+    const fod = await signedAt(pairs[2], new Date(START_3.getTime() - MINUTE));
     await expect(client.verifySignature(fod)).resolves.toBe(true);
   });
 
   test('false with the later key beyond the tolerance', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const fod = await signedAt(pairs[2], new Date(START_3.getTime() - 16 * MINUTE));
+    const fod = await signedAt(pairs[2], new Date(START_3.getTime() - HOUR));
     await expect(client.verifySignature(fod)).resolves.toBe(false);
   });
 
@@ -384,7 +388,7 @@ describe('DidClient verifySignature', () => {
   test('the later neighbour covers a date just before the schedule', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const fod = await signedAt(pairs[0], new Date(START_1.getTime() - 5 * MINUTE));
+    const fod = await signedAt(pairs[0], new Date(START_1.getTime() - MINUTE));
     await expect(client.verifySignature(fod)).resolves.toBe(true);
   });
 
