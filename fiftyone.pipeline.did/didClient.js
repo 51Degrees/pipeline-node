@@ -470,9 +470,9 @@ class DidClient {
    * Verifies the identifier's signature through the cloud's verify
    * endpoint, the open endpoint that needs no licence key. One use against
    * the resource key. The identifier is sent under both parameter names,
-   * `51did` and `owid`, because a cloud that has not taken the creator
-   * context release reads only `owid` and one that has reads `51did` and
-   * keeps `owid` as an alias.
+   * `51did` and `owid`, so the request works with hosts that read either
+   * parameter. Hosts that recognise both prefer `51did` and keep `owid` as
+   * a compatibility alias.
    * @param {FodId | string} fodId the identifier, or its base64 in either
    * alphabet
    * @returns {Promise<boolean>} whether the cloud found the signature valid
@@ -635,9 +635,8 @@ class DidClient {
 
   /**
    * GET id/key/{resource} and read each entry's start and public key.
-   * `startsAt` is read where present and `created` otherwise, because the
-   * endpoint as deployed before the creator context release emits
-   * `created` and `publicKey` only. `weekStart` is ignored.
+   * `startsAt` is read where present and `created` otherwise. Both are
+   * supported start fields in key-list responses. `weekStart` is ignored.
    * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
    */
   async _fetchKeys () {
