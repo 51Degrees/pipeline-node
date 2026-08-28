@@ -172,10 +172,8 @@ export class DidClient {
      * the one the cloud signs, the payload must be at least the base length
      * for its type (a longer payload carries a creator context and is
      * accepted), and the signature must verify against the key in force at
-     * the identifier's date or, within a short tolerance either side of a
-     * period boundary, the neighbouring key. No earlier key is ever tried, so
-     * a key leaked from one period cannot sign an identifier dated in
-     * another.
+     * the identifier's date or, near a period boundary, the neighbouring key.
+     * No earlier key is tried.
      * @param {FodId | string} fodId the identifier, or its base64
      * @returns {Promise<boolean>} true when a candidate key verifies it
      */

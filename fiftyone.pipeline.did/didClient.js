@@ -37,13 +37,6 @@ const USER_AGENT = 'fiftyone.pipeline.did/' + packageVersion;
 const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 const MINUTE_MS = 60 * 1000;
 
-/**
- * How far either side of a key boundary a neighbouring key is also tried,
- * matching the tolerance the cloud applies. A creation time is recorded to
- * the minute and stamped a moment after the key was chosen, so an identifier
- * dated a few minutes past a boundary may carry the previous key's
- * signature, and one dated a few minutes before it may carry the next.
- */
 const BOUNDARY_TOLERANCE_MS = 15 * MINUTE_MS;
 
 /** A cached key list older than this is fetched again before use. */
@@ -437,10 +430,8 @@ class DidClient {
    * the one the cloud signs, the payload must be at least the base length
    * for its type (a longer payload carries a creator context and is
    * accepted), and the signature must verify against the key in force at
-   * the identifier's date or, within a short tolerance either side of a
-   * period boundary, the neighbouring key. No earlier key is ever tried, so
-   * a key leaked from one period cannot sign an identifier dated in
-   * another.
+   * the identifier's date or, near a period boundary, the neighbouring key.
+   * No earlier key is tried.
    * @param {FodId | string} fodId the identifier, or its base64
    * @returns {Promise<boolean>} true when a candidate key verifies it
    */
@@ -792,8 +783,8 @@ function inForceAt (keys, at) {
 /**
  * The entries that may have signed something created at the moment, best
  * first: the entry in force, then the entry in force a tolerance earlier
- * and the entry in force a tolerance later where those differ. Deliberately
- * not every earlier entry.
+ * and the entry in force a tolerance later where those differ. Not every
+ * earlier entry.
  * @param {PublicKeyEntry[]} keys the schedule, in any order
  * @param {Date} at the moment
  * @returns {PublicKeyEntry[]} the entries to try, best first
