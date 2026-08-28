@@ -190,7 +190,10 @@ export class DidClient {
     /**
      * Verifies the identifier's signature through the cloud's verify
      * endpoint, the open endpoint that needs no licence key. One use against
-     * the resource key.
+     * the resource key. The identifier is sent under both parameter names,
+     * `51did` and `owid`, because a cloud that has not taken the creator
+     * context release reads only `owid` and one that has reads `51did` and
+     * keeps `owid` as an alias.
      * @param {FodId | string} fodId the identifier, or its base64 in either
      * alphabet
      * @returns {Promise<boolean>} whether the cloud found the signature valid

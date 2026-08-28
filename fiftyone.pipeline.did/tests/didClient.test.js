@@ -444,12 +444,13 @@ describe('DidClient verify (cloud)', () => {
     return { client, fetch };
   }
 
-  test('200 valid answers true and sends the URL-safe form', async () => {
+  test('200 valid answers true and sends the URL-safe form under both names', async () => {
     const { client, fetch } = verifyClient(200, { valid: true });
     await expect(client.verify(fod)).resolves.toBe(true);
     expect(fetch.calls).toHaveLength(1);
     expect(fetch.calls[0].url).toBe(
-      ENDPOINT + 'id/verify/' + RESOURCE + '?51did=' + fod.asBase64Url());
+      ENDPOINT + 'id/verify/' + RESOURCE + '?51did=' + fod.asBase64Url() +
+      '&owid=' + fod.asBase64Url());
     expect(fetch.calls[0].init.method).toBe('GET');
     expect(fetch.calls[0].init.headers['User-Agent']).toBe(USER_AGENT);
   });
@@ -459,6 +460,7 @@ describe('DidClient verify (cloud)', () => {
     await client.verify(fod.asBase64());
     expect(fetch.calls[0].url).toBe(
       ENDPOINT + 'id/verify/' + RESOURCE + '?51did=' +
+      encodeURIComponent(fod.asBase64()) + '&owid=' +
       encodeURIComponent(fod.asBase64()));
   });
 
