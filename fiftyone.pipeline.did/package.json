@@ -18,6 +18,9 @@
   "dependencies": {
     "owid": "github:51Degrees/owid-js#main"
   },
+  "bundleDependencies": [
+    "owid"
+  ],
   "devDependencies": {
     "jest": "^29.7.0"
   },
