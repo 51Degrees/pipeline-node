@@ -37,20 +37,29 @@ as `PROBABILISTIC`.
 
 `FodId` builds on the OWID envelope library
 ([SWAN-community/owid-js](https://github.com/SWAN-community/owid-js)), consumed
-via the `51Degrees/owid-js` fork as a git submodule and a `file:` dependency
-(switch to the npm registry once published). owid-js is parse + verify only and
-exposes no instance `asBase64`, so `FodId` **composes** an owid instance, keeps
-the original base64 for `asBase64()`, and delegates the rest.
+through the [51Degrees/owid-js](https://github.com/51Degrees/owid-js) fork.
+owid-js is parse + verify only and exposes no instance `asBase64`, so `FodId`
+**composes** an owid instance, keeps the original base64 for `asBase64()`, and
+delegates the rest.
 
 The fork was extended with an offline `verifyWithPublicKey(pem, others)` that
 works in Node and the browser (Web Crypto), so `FodId.verify()` runs without
 contacting a network endpoint.
 
+The fork is not on the npm registry, so `package.json` names it as the GitHub
+reference `github:51Degrees/owid-js#main`, which npm resolves by cloning the
+repository. That applies only when working in this repository, because the
+published `fiftyone.pipeline.did` package carries the OWID source inside its
+own tarball under `node_modules/owid`, named in `bundleDependencies`. Anyone
+installing the package from npm needs neither git nor reachable GitHub, and
+gets the same OWID code every time, whatever the fork's `main` branch happens
+to hold on the day. owid-js is Apache-2.0 and its `LICENSE` file travels in
+the bundle alongside the source.
+
 ## Install / build
 
 ```bash
-git submodule update --init   # fetches owid-js into ../owid-js
-npm install
+npm install   # needs git on the PATH to fetch the owid-js fork
 npm test
 ```
 
