@@ -1,0 +1,12 @@
+import FodId = require("./fodId");
+import IdType = require("./idType");
+import { DidClient } from "./didClient";
+import { RedeemResult } from "./didClient";
+import { ContextResult } from "./didClient";
+import { SignatureResult } from "./didClient";
+import { FactorResult } from "./didClient";
+import { SignatureReason } from "./didClient";
+import { DidClientError } from "./didClient";
+import { DidArgumentError } from "./didClient";
+import { DidNotSupportedError } from "./didClient";
+export { FodId, IdType, DidClient, RedeemResult, ContextResult, SignatureResult, FactorResult, SignatureReason, DidClientError, DidArgumentError, DidNotSupportedError };

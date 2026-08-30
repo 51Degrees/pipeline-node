@@ -22,108 +22,20 @@
 
 const owid = require('owid');
 const { FodId, IdType } = require('../index');
-
-const VERSION = 2;
-const DOMAIN = '51degrees.com';
-const DATE = 2900000; // minutes since 2020-01-01
-const CANONICAL_FLAGS = 0xA5; // HashedEmail type tag + usage bits
-const CANONICAL_LICENSE_ID = 0x12345678;
-
-function canonicalHash () {
-  const h = new Uint8Array(FodId.HASH_LENGTH);
-  for (let i = 0; i < h.length; i++) { h[i] = 0x20 + i; }
-  return h;
-}
-
-function writeLicenseId (payload) {
-  // Little-endian 0x12345678 -> 78 56 34 12.
-  payload[FodId.LICENSE_ID_OFFSET] = 0x78;
-  payload[FodId.LICENSE_ID_OFFSET + 1] = 0x56;
-  payload[FodId.LICENSE_ID_OFFSET + 2] = 0x34;
-  payload[FodId.LICENSE_ID_OFFSET + 3] = 0x12;
-}
-
-function canonicalPayload () {
-  const p = new Uint8Array(FodId.PAYLOAD_LENGTH);
-  p[FodId.FLAGS_OFFSET] = CANONICAL_FLAGS;
-  writeLicenseId(p);
-  p.set(canonicalHash(), FodId.HASH_OFFSET);
-  return p;
-}
-
-function canonicalRandomPayload () {
-  const p = new Uint8Array(FodId.RANDOM_PAYLOAD_LENGTH);
-  p[FodId.FLAGS_OFFSET] = (1 << 6) | 0b001; // Random tag + usage bits
-  writeLicenseId(p);
-  for (let i = 0; i < FodId.GUID_LENGTH; i++) {
-    p[FodId.HASH_OFFSET + i] = 0x40 + i;
-  }
-  return p;
-}
-
-function uint32LE (v) {
-  return [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF];
-}
-
-// Builds OWID envelope bytes (version 2 wire format) with the given payload and
-// an arbitrary signature, matching owid-js getByteArray + a 64-byte signature.
-function noSigBytes (payload, date) {
-  const out = [VERSION];
-  for (let i = 0; i < DOMAIN.length; i++) { out.push(DOMAIN.charCodeAt(i)); }
-  out.push(0);
-  out.push(...uint32LE(date));
-  out.push(...uint32LE(payload.length));
-  for (const b of payload) { out.push(b); }
-  return Uint8Array.from(out);
-}
-
-const DUMMY_SIG = (() => {
-  const s = new Uint8Array(64);
-  for (let i = 0; i < 64; i++) { s[i] = i + 1; }
-  return s;
-})();
-
-function envelopeBytes (payload, { date = DATE, signature = DUMMY_SIG } = {}) {
-  const noSig = noSigBytes(payload, date);
-  const full = new Uint8Array(noSig.length + signature.length);
-  full.set(noSig);
-  full.set(signature, noSig.length);
-  return full;
-}
-
-function envelopeBase64 (payload, opts) {
-  return Buffer.from(envelopeBytes(payload, opts)).toString('base64');
-}
-
-// Real ECDSA P-256 signing via Web Crypto, for the verify tests.
-async function signedVerifiable (payload, date = DATE) {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const noSig = noSigBytes(payload, date);
-  const sig = new Uint8Array(await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' }, keyPair.privateKey, noSig));
-  const full = new Uint8Array(noSig.length + sig.length);
-  full.set(noSig);
-  full.set(sig, noSig.length);
-  const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-  return {
-    base64: Buffer.from(full).toString('base64'),
-    publicPem: toPem('PUBLIC KEY', new Uint8Array(spki))
-  };
-}
-
-async function randomPublicPem () {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-  return toPem('PUBLIC KEY', new Uint8Array(spki));
-}
-
-function toPem (label, der) {
-  const b64 = Buffer.from(der).toString('base64');
-  return `-----BEGIN ${label}-----\n${b64.match(/.{1,64}/g).join('\n')}\n` +
-    `-----END ${label}-----\n`;
-}
+const {
+  DOMAIN,
+  DATE,
+  CANONICAL_FLAGS,
+  CANONICAL_LICENSE_ID,
+  DUMMY_SIG,
+  canonicalHash,
+  canonicalPayload,
+  canonicalRandomPayload,
+  envelopeBytes,
+  envelopeBase64,
+  signedVerifiable,
+  randomPublicPem
+} = require('./envelope');
 
 describe('FodId', () => {
   // ----- Current .NET coverage -----
@@ -246,6 +158,46 @@ describe('FodId', () => {
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.hash).toEqual(canonicalHash());
     expect(fod.hash.length).toBe(FodId.HASH_LENGTH);
+  });
+
+  test('a long context section and a long creator domain both parse', () => {
+    // The creator domain is a deployment parameter, so a self-hosted
+    // container may sign with a longer one, and a context section of a
+    // version this reader does not implement may be longer still. Both
+    // must parse and leave the judgement to the cloud.
+    const p = new Uint8Array(FodId.PAYLOAD_LENGTH + 400);
+    p.set(canonicalPayload());
+    p.fill(0xCC, FodId.PAYLOAD_LENGTH);
+    const bytes = envelopeBytes(p, {
+      domain: 'a-self-hosted-container.example.internal.51degrees.com'
+    });
+    const encoded = Buffer.from(bytes).toString('base64');
+
+    for (const fod of [
+      FodId.fromBase64(encoded),
+      FodId.fromByteArray(bytes),
+      FodId.fromOwid(new owid(encoded))
+    ]) {
+      expect(fod.flags).toBe(CANONICAL_FLAGS);
+      expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
+      expect(fod.hash).toEqual(canonicalHash());
+      expect(fod.payload).toHaveLength(p.length);
+    }
+  });
+
+  test('surrounding whitespace parses to the same value', () => {
+    const clean = envelopeBase64(canonicalPayload());
+    const expected = FodId.fromBase64(clean);
+    for (const spaced of [
+      clean + '\n', ' ' + clean, clean + ' ', ' \r\n\t' + clean + ' \r\n\t',
+      FodId.toBase64Url(clean) + '\n', ' ' + FodId.toBase64Url(clean) + ' '
+    ]) {
+      const fod = FodId.fromBase64(spaced);
+      expect(fod.asBase64()).toBe(expected.asBase64());
+      expect(fod.hash).toEqual(expected.hash);
+      expect(fod.licenseId).toBe(expected.licenseId);
+      expect(fod.flags).toBe(expected.flags);
+    }
   });
 
   test('is cryptographically verifiable', async () => {
@@ -379,5 +331,79 @@ describe('FodId', () => {
     expect(fod2.licenseId).toBe(fod1.licenseId);
     expect(fod2.hash).toEqual(fod1.hash);
     expect(fod2.domain).toBe(fod1.domain);
+  });
+
+  // ----- Both base64 alphabets -----
+
+  // A payload whose envelope base64 contains both characters that differ
+  // between the alphabets, so the URL-safe form is a real conversion.
+  function alphabetPayload () {
+    const p = canonicalPayload();
+    // 0xFB 0xFF 0xBF encodes to "+/+/" in standard base64.
+    p[FodId.HASH_OFFSET] = 0xFB;
+    p[FodId.HASH_OFFSET + 1] = 0xFF;
+    p[FodId.HASH_OFFSET + 2] = 0xBF;
+    return p;
+  }
+
+  test('fromBase64 accepts the standard, URL-safe and unpadded forms', () => {
+    const standard = envelopeBase64(alphabetPayload());
+    expect(standard).toMatch(/[+/]/);
+    expect(standard).toMatch(/=$/);
+    const urlSafePadded = standard.replace(/\+/g, '-').replace(/\//g, '_');
+    const urlSafe = urlSafePadded.replace(/=+$/, '');
+    expect(urlSafe).not.toMatch(/[+/=]/);
+
+    const a = FodId.fromBase64(standard);
+    const b = FodId.fromBase64(urlSafePadded);
+    const c = FodId.fromBase64(urlSafe);
+    for (const fod of [b, c]) {
+      expect(fod.flags).toBe(a.flags);
+      expect(fod.licenseId).toBe(a.licenseId);
+      expect(fod.hash).toEqual(a.hash);
+      expect(fod.date).toBe(a.date);
+      expect(fod.signature).toEqual(a.signature);
+      // Held in the standard form whichever form was given.
+      expect(fod.asBase64()).toBe(standard);
+    }
+  });
+
+  test('asBase64Url round-trips', () => {
+    const standard = envelopeBase64(alphabetPayload());
+    const fod = FodId.fromBase64(standard);
+    const url = fod.asBase64Url();
+    expect(url).not.toMatch(/[+/=]/);
+    expect(url).toBe(FodId.toBase64Url(standard));
+    expect(FodId.toStandardBase64(url)).toBe(standard);
+    const back = FodId.fromBase64(url);
+    expect(back.asBase64()).toBe(standard);
+    expect(back.hash).toEqual(fod.hash);
+  });
+
+  test('toStandardBase64 pads by length', () => {
+    expect(FodId.toStandardBase64('QQ')).toBe('QQ==');
+    expect(FodId.toStandardBase64('QUI')).toBe('QUI=');
+    expect(FodId.toStandardBase64('QUJD')).toBe('QUJD');
+    expect(FodId.toStandardBase64('-_8')).toBe('+/8=');
+    expect(() => FodId.toStandardBase64(null)).toThrow(TypeError);
+    expect(() => FodId.toBase64Url(null)).toThrow(TypeError);
+  });
+
+  // ----- Date -----
+
+  test('dateMinutes equals the envelope date field', () => {
+    const fod = FodId.fromBase64(
+      envelopeBase64(canonicalPayload(), { date: DATE }));
+    expect(fod.dateMinutes).toBe(DATE);
+    expect(fod.dateMinutes).toBe(fod.date);
+  });
+
+  test('dateMinutes is unsigned', () => {
+    // A date with the high bit set reads as negative through the OWID
+    // library and as the unsigned 32-bit value here.
+    const fod = FodId.fromBase64(
+      envelopeBase64(canonicalPayload(), { date: 0xF0000001 }));
+    expect(fod.dateMinutes).toBe(0xF0000001);
+    expect(fod.date).toBeLessThan(0);
   });
 });
