@@ -156,16 +156,15 @@ and `FodId.checkSignature()` run without contacting a network endpoint.
 
 The library is not on the npm registry, so `package.json` names it as a
 GitHub reference, which npm resolves by cloning the repository. The reference
-is currently `github:SWAN-community/owid-js#78ee457`, the tip of the hardening
-branch, and returns to the [51Degrees/owid-js](https://github.com/51Degrees/owid-js)
-fork at the merged commit once the fork is synced. That applies only when
-working in this repository, because the published `fiftyone.pipeline.did`
-package carries the OWID source inside its own tarball under
-`node_modules/owid`, named in `bundleDependencies`. Anyone installing the
-package from npm needs neither git nor reachable GitHub, and gets the same
-OWID code every time, whatever the referenced branch happens to hold on the
-day. owid-js is Apache-2.0 and its `LICENSE` file travels in the bundle
-alongside the source.
+is `github:51Degrees/owid-js#8363541e`, the merged hardening commit on `main`
+of the [51Degrees/owid-js](https://github.com/51Degrees/owid-js) fork. That
+applies only when working in this repository, because the published
+`fiftyone.pipeline.did` package carries the OWID source inside its own
+tarball under `node_modules/owid`, named in `bundleDependencies`. Anyone
+installing the package from npm needs neither git nor reachable GitHub, and
+gets the same OWID code every time, whatever the referenced branch happens
+to hold on the day. owid-js is Apache-2.0 and its `LICENSE` file travels in
+the bundle alongside the source.
 
 ## Install / build
 
