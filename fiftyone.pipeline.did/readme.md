@@ -24,12 +24,12 @@ the 51Degrees Cloud service, and a client for everything a server does with a
 |      1 |      4 | LicenseId  | uint32 (little-endian), see below               |
 |      5 |  16/32 | Value      | SHA-256 (Probabilistic, HashedEmail) or GUID (Random) |
 
-| Bits 7-6 | `IdType`        | Value length | Minimum payload |
-|---------:|-----------------|-------------:|----------------:|
-|     `00` | `PROBABILISTIC` |           32 |              37 |
-|     `01` | `RANDOM`        |           16 |              21 |
-|     `10` | `HASHED_EMAIL`  |           32 |              37 |
-|     `11` | `RESERVED`      |    remainder |               5 |
+| Bits 7-6 | `IdType`        | Value length | Least payload accepted |
+|---------:|-----------------|-------------:|-----------------------:|
+|     `00` | `PROBABILISTIC` |           32 |                     37 |
+|     `01` | `RANDOM`        |           16 |                     21 |
+|     `10` | `HASHED_EMAIL`  |           32 |                     37 |
+|     `11` | `RESERVED`      |    remainder |                      5 |
 
 Identifiers issued before the type tag existed have bits 6-7 zeroed and decode
 as `PROBABILISTIC`.
@@ -38,39 +38,138 @@ On an identifier carrying a creator context (which binds the identifier to the
 browser and connection it was created on) the four bytes at offset 1 hold an
 encrypted value that only 51Degrees can turn back into a licence identifier.
 `licenseId` is then the field's raw value and identifies nothing outside
-51Degrees. A payload longer than the minimum carries the creator context after
-the value, and the reader accepts it as it accepts the base length. The lengths
-of a context section belong to the cloud, so the reader checks only the lower
-bound for the identifier type and leaves anything longer for the cloud to
-judge.
+51Degrees. A payload longer than the least length carries the creator context
+after the value, and the reader accepts it as it accepts the base length. The
+lengths of a context section belong to the cloud, so the reader checks only
+the lower bound for the identifier type, holds no upper bound of its own, and
+leaves anything longer for the cloud to judge. A reader built before a longer
+context section existed therefore still reads the identifier.
+
+## Reading a 51Did
+
+A 51Did arrives from outside, from a page, a link or a log line, so a value
+that is not one is an ordinary outcome rather than an error. `FodId.tryParse`
+and `FodId.tryFromByteArray` never throw. Each returns a frozen result
+reporting the same three facts:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ok` | boolean | True when the input was a structurally valid 51Did |
+| `value` | `FodId` or `null` | The identifier on success and `null` on failure, never a half read identifier |
+| `status` | string | `FodId.ParseStatus.PARSED` on success, otherwise the specific reason |
+
+```js
+const { FodId } = require('fiftyone.pipeline.did');
+
+const result = FodId.tryParse(untrusted);
+if (result.ok) {
+  use(result.value);
+} else {
+  console.log('not a 51Did: ' + result.status);
+}
+```
+
+Reading and verifying are two questions with two answers. A successful read
+says the bytes are a structurally valid 51Did and nothing more. No read
+fetches a key or checks a signature, so a parsed 51Did is not necessarily
+genuine, and a structurally valid identifier whose signature does not match
+reads successfully and then fails verification. Verify with
+`fodId.verify(publicKeyPem)`, `fodId.checkSignature(publicKeyPem)` or
+`DidClient.verifySignature(fodId)`, described below.
+
+### Read statuses
+
+`FodId.ParseStatus` is a frozen object of stable string values. Compare
+against its members rather than against the text of any message. The
+vocabulary is the OWID library's own, carried through unchanged, plus two
+members for the 51Did payload. A failure the OWID library reported keeps the
+OWID library's status, so a specific reason is never reduced to a general one.
+
+| Status | Reported by | Meaning |
+| --- | --- | --- |
+| `PARSED` | both | The input is a structurally valid 51Did. Says nothing about the signature |
+| `MISSING_INPUT` | OWID | Nothing was supplied, being `null`, `undefined`, an empty or whitespace-only string, or a buffer of no bytes |
+| `INVALID_INPUT_TYPE` | OWID | The input was not a string (`tryParse`) or not a byte array (`tryFromByteArray`) |
+| `INVALID_BASE64` | OWID | The string is not base64 in either alphabet, so there are no bytes to read |
+| `UNSUPPORTED_VERSION` | OWID | The first byte names an envelope version the OWID library does not know |
+| `ABSENT_NODE` | OWID | The bytes are the OWID absent node marker, which stands for no identifier |
+| `UNEXPECTED_END` | OWID | The data stopped part way through a field |
+| `INVALID_DOMAIN_ENCODING` | OWID | The creator domain is not terminated or is longer than a domain name can be |
+| `BYTE_COUNT_MISMATCH` | OWID | The declared payload byte count disagrees with the bytes present |
+| `IMPLEMENTATION_CAPACITY_EXCEEDED` | OWID | The envelope is consistent but larger than this runtime can hold |
+| `MALFORMED_ENVELOPE` | OWID | Malformed in a way none of the above describes |
+| `PAYLOAD_TOO_SHORT` | 51Did | The payload is shorter than the 5 byte header (flags and licence id), so the type cannot be read |
+| `INVALID_TYPE_PAYLOAD_LENGTH` | 51Did | The header named a type and the payload is shorter than that type's value needs, being 21 bytes for Random and 37 for Probabilistic and HashedEmail |
+
+A Reserved type is not yet assigned, so the reader accepts it at any length
+from the header up and exposes whatever follows the header as the value.
+
+### The throwing surface
+
+`FodId.fromBase64(base64)`, `FodId.fromByteArray(bytes)`, `FodId.fromOwid(owid)`
+and `new FodId(owid)` are the same read for a caller who prefers an
+exception. They run the same checks, in the same order, and throw:
+
+| Thrown | When |
+| --- | --- |
+| `TypeError` | The argument is the wrong kind of thing, being `null`, `undefined`, a non-string to `fromBase64`, or a non-`Uint8Array` to `fromByteArray` |
+| `RangeError` | The payload is `PAYLOAD_TOO_SHORT` or `INVALID_TYPE_PAYLOAD_LENGTH`. The error carries `status` |
+| `FodIdParseError` | The OWID library refused the envelope for any other status. The error carries `status` |
+
+A wrong argument type is a programming error and stays exceptional on every
+surface. Everything else is a fact about the data, which the non-throwing
+surfaces report as a result and the throwing surfaces report as one of the
+two errors above.
+
+### Migrating from the removed OWID API
+
+The OWID library this package builds on no longer has a public constructor
+and no longer throws from a read (see the next section). A caller who reached
+the OWID library through this package changes as follows.
+
+| Before | After |
+| --- | --- |
+| `FodId.fromOwid(new owid(s))` | `FodId.fromBase64(s)`, or `FodId.tryParse(s)` for a result |
+| `try { FodId.fromBase64(s) } catch (e) { /* e was a string */ }` | `const r = FodId.tryParse(s); if (!r.ok) { /* r.status */ }` |
+| `catch (e)` on `fromBase64` reading `e.message` | `catch (e)` reading `e.status`, one of `FodId.ParseStatus` |
+| `fodId.date` read as a signed number | `fodId.date` is now unsigned, the same value as `fodId.dateMinutes` |
+| `fodId.verify(pem)` resolving `false` for a key that could not be imported | `verify` rejects when the question could not be answered, and `checkSignature(pem)` reports `INVALID_KEY` |
 
 ## OWID dependency
 
 `FodId` builds on the OWID envelope library
-([SWAN-community/owid-js](https://github.com/SWAN-community/owid-js)), consumed
-through the [51Degrees/owid-js](https://github.com/51Degrees/owid-js) fork.
-owid-js is parse + verify only and exposes no instance `asBase64`, so `FodId`
-**composes** an owid instance, keeps the original base64 for `asBase64()`, and
-delegates the rest.
+([SWAN-community/owid-js](https://github.com/SWAN-community/owid-js)). The
+library is read and verify only, so `FodId` **composes** the OWID the library
+read, delegates the envelope fields to it, and keeps the standard base64 for
+`asBase64()`.
 
-The fork was extended with an offline `verifyWithPublicKey(pem, others)` that
-works in Node and the browser (Web Crypto), so `FodId.verify()` runs without
-contacting a network endpoint.
+The library was hardened so that an OWID reaches calling code by one route
+only, which is a successful read through `owid.parse` or `owid.parseBytes`.
+Those reads answer with `{ ok, owid, status }` and never throw, `new owid()`
+throws naming what to use instead, and an OWID that has been read is frozen
+and hands out its byte arrays as copies. This package follows the same shape,
+which is why `tryParse` and `tryFromByteArray` exist and why the OWID statuses
+appear in `FodId.ParseStatus` unchanged. The library also offers an offline
+`verifyWithPublicKey(pem, others)` and `checkSignatureWithPublicKey(pem,
+others)` that work in Node and the browser (Web Crypto), so `FodId.verify()`
+and `FodId.checkSignature()` run without contacting a network endpoint.
 
-The fork is not on the npm registry, so `package.json` names it as the GitHub
-reference `github:51Degrees/owid-js#main`, which npm resolves by cloning the
-repository. That applies only when working in this repository, because the
-published `fiftyone.pipeline.did` package carries the OWID source inside its
-own tarball under `node_modules/owid`, named in `bundleDependencies`. Anyone
+The library is not on the npm registry, so `package.json` names it as a
+GitHub reference, which npm resolves by cloning the repository. The reference
+is `github:51Degrees/owid-js#8363541e`, the merged hardening commit on `main`
+of the [51Degrees/owid-js](https://github.com/51Degrees/owid-js) fork. That
+applies only when working in this repository, because the published
+`fiftyone.pipeline.did` package carries the OWID source inside its own
+tarball under `node_modules/owid`, named in `bundleDependencies`. Anyone
 installing the package from npm needs neither git nor reachable GitHub, and
-gets the same OWID code every time, whatever the fork's `main` branch happens
+gets the same OWID code every time, whatever the referenced branch happens
 to hold on the day. owid-js is Apache-2.0 and its `LICENSE` file travels in
 the bundle alongside the source.
 
 ## Install / build
 
 ```bash
-npm install   # needs git on the PATH to fetch the owid-js fork
+npm install   # needs git on the PATH to fetch owid-js
 npm test
 ```
 
@@ -97,7 +196,38 @@ const inLink = fodId.asBase64Url();   // URL-safe alphabet, no padding
 
 `dateMinutes` is the envelope's own date as the unsigned 32-bit count of
 minutes since 2020-01-01T00:00:00Z, the value the OWID `public-key?date=`
-parameter takes, for callers comparing creation times.
+parameter takes, for callers comparing creation times. `date` now reports
+the same unsigned value.
+
+Where the value may not be a 51Did at all, read it without throwing.
+
+```js
+const result = FodId.tryParse(valueFromOutside);
+if (!result.ok) {
+  // result.status is one of FodId.ParseStatus, and result.value is null.
+  return;
+}
+const fodId = result.value;
+```
+
+`fodId.checkSignature(publicKeyPem)` reports the signature outcome as one of
+`FodId.SignatureStatus` (the OWID library's own frozen object), so that "could
+not check" stays apart from "does not match". Only `SIGNATURE_INVALID` means
+the identifier should be distrusted, and `KEY_UNAVAILABLE`, `INVALID_KEY` and
+`VERIFICATION_ERROR` mean the question was never answered. The boolean
+`verify(publicKeyPem)` resolves only for the two statuses that judge the
+signature and rejects for the rest, because a caller told `false` would treat
+an outage as a forgery.
+
+```js
+const check = await fodId.checkSignature(publicKeyPem);
+if (check.status === FodId.SignatureStatus.SIGNATURE_INVALID) {
+  // The identifier should be distrusted.
+} else if (!check.ok) {
+  // The signature was never judged. Do not treat this as a forgery.
+  console.log(check.status + ': ' + check.message);
+}
+```
 
 ## Comparing two 51Dids
 
@@ -136,11 +266,26 @@ const client = new DidClient({
 
 Every request carries a `User-Agent` naming this package and its version.
 
+Every client method takes either a `FodId` or the identifier's base64 in
+either alphabet. A string is read before anything else happens. The client
+first turns away an encoded value longer than 4096 characters with a
+`DidArgumentError`, which is client policy on the size of input the client
+is willing to look at, deliberately generous and unrelated to how long a
+51Did is, and it is not a limit of the 51Did format. A string under that
+length that does not read as a 51Did is refused with a `DidArgumentError`
+naming the read status, and in both cases no key is fetched and no request
+is made. A key list that cannot be fetched is a `DidClientError`, never an
+invalid signature.
+
 **1. Parse.** The identifier arrives from a page in the URL-safe alphabet and
-from the cloud in the standard one. `fromBase64` takes either.
+from the cloud in the standard one. `tryParse` and `fromBase64` take either.
 
 ```js
-const fodId = FodId.fromBase64(fiftyOneDid);
+const read = FodId.tryParse(fiftyOneDid);
+if (!read.ok) {
+  // Answer the page with read.status. Nothing has been fetched.
+}
+const fodId = read.value;
 ```
 
 **2. Verify the signature offline.** The client fetches the published signing
@@ -160,10 +305,16 @@ const keys = await client.publicKeys();     // [{ startsAt: Date, publicKey: PEM
 const key = await client.publicKeyFor(fodId); // the entry in force, or null
 ```
 
+`verifySignatureDetailed` answers `{ valid: false, reason: 'signature' }` only
+when a candidate key was tried and the signature did not match. A date no
+published key covers is `'nokey'`, and a key list that could not be fetched
+rejects with a `DidClientError`, so an outage never reads as a forgery.
+
 **3. Verify the signature through the cloud.** The open `verify` endpoint,
-one use against the resource key and no licence key needed. A value the
-cloud cannot parse as a 51Did raises `DidArgumentError` with the cloud's
-message.
+one use against the resource key and no licence key needed. A value that does
+not read as a 51Did is refused before the request with a `DidArgumentError`
+naming the status, and a value the cloud refuses raises `DidArgumentError`
+with the cloud's message.
 
 ```js
 const valid = await client.verify(fodId);   // boolean
@@ -195,19 +346,23 @@ A context string this package does not know maps to `unreadable`, so an
 unrecognised outcome is never mistaken for a good one, and `contextRaw` keeps
 the string as sent. Every cryptographic failure comes back from the cloud as
 the one word `unreadable` by design, a missing licence key included, so the
-client does not try to tell them apart either. A cloud that cannot parse the
-51Did raises `DidArgumentError` (HTTP 400), a host that does not offer the
-creator context raises `DidNotSupportedError` (HTTP 404), and any other
-status raises `DidClientError` carrying `statusCode` and `body`. A transport
-failure raises the error `fetch` raised.
+client does not try to tell them apart either. A value that does not read as
+a 51Did is refused before the request with a `DidArgumentError` naming the
+status, a cloud that refuses the 51Did raises `DidArgumentError` (HTTP 400),
+a host that does not offer the creator context raises `DidNotSupportedError`
+(HTTP 404), and any other status raises `DidClientError` carrying
+`statusCode` and `body`. A transport failure raises the error `fetch` raised.
 
 ## Non-goals
 
-- **No signature verification on construction.** Call `verify(publicKeyPem)`
-  or `DidClient.verifySignature(fodId)` when needed (both are asynchronous).
+- **No signature verification on read.** Call `verify(publicKeyPem)`,
+  `checkSignature(publicKeyPem)` or `DidClient.verifySignature(fodId)` when
+  needed (all are asynchronous).
 - **No creation of new 51Dids.** Creation is the cloud `json` endpoint through
   the cloud request engine and pipeline, and a page creates from the browser
   because the identifier describes the browser's own connection.
+- **No upper bound on the payload.** The lengths of a creator context section
+  belong to the cloud.
 
 ## Examples
 
@@ -273,7 +428,15 @@ const { FodId, DidClient } = require('fiftyone.pipeline.did');
 const client = new DidClient({ resourceKey, licenceKey });
 
 // In the /redeem route, with 51did, result and challenge from the page.
-const fodId = FodId.fromBase64(fiftyOneDid);
+const read = FodId.tryParse(fiftyOneDid);
+if (!read.ok) {
+  response.writeHead(400, { 'Content-Type': 'application/json' });
+  response.end(JSON.stringify({
+    errors: ['51did is not a valid 51Did (' + read.status + ').']
+  }));
+  return;
+}
+const fodId = read.value;
 const signatureValid = await client.verifySignature(fodId);
 const redeemed = await client.redeem(fodId, result, challenge);
 const body = redeemed.toJSON();

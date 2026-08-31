@@ -111,6 +111,28 @@ async function run () {
     throw new Error(
       'Expected a different envelope but the same value across reissues.');
   }
+
+  // A 51Did arrives from outside, so a value that is not one is an ordinary
+  // outcome rather than an error. tryParse answers with a reason instead of
+  // throwing, and reading says nothing about the signature, which is the
+  // separate question verify answered above.
+  console.log('\nReading answers with a reason:');
+  for (const input of [fodId.asBase64Url(), 'not a 51Did', '']) {
+    const result = FodId.tryParse(input);
+    const shown = JSON.stringify(input.slice(0, 16)) +
+      (input.length > 16 ? '...' : '');
+    console.log('  ' + shown + ' -> ok ' + result.ok +
+      ', status ' + result.status);
+  }
+  const shortPayload = await issue(
+    keyPair.privateKey, payload.slice(0, FodId.PAYLOAD_LENGTH - 1), DATE);
+  const short = FodId.tryParse(shortPayload);
+  console.log('  a payload one byte short -> ok ' + short.ok +
+    ', status ' + short.status);
+  const expected = FodId.ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH;
+  if (short.ok || short.status !== expected) {
+    throw new Error('Expected InvalidTypePayloadLength for a short payload.');
+  }
 }
 
 run().catch((e) => { console.error(e); process.exit(1); });
