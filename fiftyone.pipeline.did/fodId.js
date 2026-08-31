@@ -22,6 +22,41 @@
 
 const owid = require('owid');
 const IdType = require('./idType');
+const FodIdParseError = require('./fodIdParseError');
+
+/**
+ * Why a read of a 51Did succeeded or failed. The OWID library's own
+ * vocabulary is carried through unchanged, because a 51Did failing to be
+ * an OWID is reported exactly as the OWID library reported it, and two
+ * members are added for the outcomes that belong to the 51Did payload
+ * rather than to the envelope. Frozen, and compared by value rather than
+ * by the text of any message.
+ */
+const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
+  /**
+   * The payload is shorter than the five byte header (one byte of flags
+   * and four bytes of licence id), so not even the identifier type can be
+   * read.
+   */
+  PAYLOAD_TOO_SHORT: 'PayloadTooShort',
+  /**
+   * The header was read and named a type, and the payload is shorter than
+   * the value that type carries after the header (16 GUID bytes for
+   * Random, 32 hash bytes for Probabilistic and HashedEmail).
+   */
+  INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength'
+}));
+
+/**
+ * The answer from {@link FodId.tryParse} and {@link FodId.tryFromByteArray}.
+ * Frozen. On success `ok` is true, `value` is the identifier and `status`
+ * is `ParseStatus.PARSED`. On failure `ok` is false, `value` is null, never
+ * a half read identifier, and `status` names the reason.
+ * @typedef {object} FodIdParseResult
+ * @property {boolean} ok whether the input was a structurally valid 51Did
+ * @property {FodId | null} value the identifier on success, null on failure
+ * @property {string} status one of {@link FodId.ParseStatus}
+ */
 
 /**
  * A strongly typed reader for the 51Did (51Degrees Identifier) value returned
@@ -35,10 +70,18 @@ const IdType = require('./idType');
  * same value even though their envelopes differ. Compare values, never
  * envelopes.
  *
- * The owid-js library is verify-only and exposes no instance asBase64, so this
- * type composes an owid instance (holds it and delegates) and keeps the
- * original base64 for {@link FodId#asBase64}. Construction does NOT verify the
- * signature; call {@link FodId#verify} (async) explicitly.
+ * Reading and verifying are two separate questions. {@link FodId.tryParse}
+ * and {@link FodId.tryFromByteArray} answer whether the input is a
+ * structurally valid 51Did, with a status rather than an exception, and a
+ * successful read says nothing about the signature. {@link FodId.fromBase64}
+ * and {@link FodId.fromByteArray} are the same read for callers who prefer
+ * an exception. No read fetches a key or checks a signature, so a parsed
+ * 51Did is not necessarily genuine. Call {@link FodId#verify} or
+ * {@link FodId#checkSignature} for that.
+ *
+ * A FodId composes the OWID the OWID library read (holds it and delegates
+ * the envelope fields to it). That OWID is frozen and hands out its byte
+ * arrays as copies, so nothing a caller holds can change the identifier.
  */
 class FodId {
   static FLAGS_OFFSET = 0;
@@ -52,50 +95,54 @@ class FodId {
   static PAYLOAD_LENGTH = 37;
 
   /**
-   * Promotes an already-parsed owid instance into a 51Did by unpacking its
-   * payload. The owid is **copied** (re-parsed from its base64), not aliased,
-   * so a FodId can never desync from its envelope if the caller later mutates
-   * the owid they passed in.
-   * @param {object} owidInstance an owid instance (from `new owid(base64)`)
+   * Why a read succeeded or failed, being the OWID library's statuses plus
+   * `PAYLOAD_TOO_SHORT` and `INVALID_TYPE_PAYLOAD_LENGTH`. Frozen.
+   * @type {Readonly<Record<string, string>>}
+   */
+  static ParseStatus = ParseStatus;
+
+  /**
+   * The outcome of asking whether a signature is genuine, as reported by
+   * {@link FodId#checkSignature}. The OWID library's own frozen object.
+   * Only `SIGNATURE_VALID` and `SIGNATURE_INVALID` judge the signature, and
+   * every other member says the question could not be answered.
+   * @type {Readonly<Record<string, string>>}
+   */
+  static SignatureStatus = owid.SignatureStatus;
+
+  /**
+   * Builds a 51Did from an OWID the OWID library read. The OWID is not
+   * aliased. Its base64 is read again through the same walk every other
+   * surface uses, so a FodId built this way is identical to one from
+   * {@link FodId.fromBase64} and can never disagree with its envelope.
+   * @param {object} owidInstance an OWID from `owid.parse` or
+   * `owid.parseBytes`, or any object carrying the envelope base64 as `data`
+   * @throws {TypeError} when no OWID was given
+   * @throws {RangeError} when the payload is shorter than a 51Did of its
+   * type can be
+   * @throws {FodIdParseError} when the base64 is not an OWID
    */
   constructor (owidInstance) {
     if (owidInstance === null || owidInstance === undefined) {
       throw new TypeError('owid must not be null or undefined');
     }
-    this._owid = new owid(owidInstance.data);
-    const payload = this._owid.owid.payload;
-    const length = payload ? payload.length : 0;
-    if (!payload || length < FodId.HEADER_LENGTH) {
-      throw new RangeError(
-        `51Did payload must be at least ${FodId.HEADER_LENGTH} bytes; ` +
-        `got ${length}.`);
+    if (typeof owidInstance.data !== 'string') {
+      throw new TypeError(
+        'owid must be an OWID read by the OWID library, carrying its ' +
+        'base64 as data');
     }
-    this._flags = payload[FodId.FLAGS_OFFSET];
-    // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
-    // does not produce a negative number.
-    this._licenseId = (
-      payload[FodId.LICENSE_ID_OFFSET] |
-      (payload[FodId.LICENSE_ID_OFFSET + 1] << 8) |
-      (payload[FodId.LICENSE_ID_OFFSET + 2] << 16) |
-      (payload[FodId.LICENSE_ID_OFFSET + 3] << 24)
-    ) >>> 0;
-    const type = IdType.fromFlags(this._flags);
-    let valueLength;
-    if (type === IdType.RANDOM) {
-      valueLength = FodId.GUID_LENGTH;
-    } else if (type === IdType.RESERVED) {
-      valueLength = length - FodId.HEADER_LENGTH;
-    } else {
-      valueLength = FodId.HASH_LENGTH;
+    const read = readBase64(owidInstance.data);
+    if (!read.ok) {
+      throw errorFor(read);
     }
-    if (length < FodId.HEADER_LENGTH + valueLength) {
-      throw new RangeError(
-        `51Did payload for the ${IdType.name(type)} type must be at least ` +
-        `${FodId.HEADER_LENGTH + valueLength} bytes; got ${length}.`);
-    }
-    // slice() copies, so the stored value cannot mutate the OWID payload.
-    this._hash = payload.slice(
-      FodId.HASH_OFFSET, FodId.HASH_OFFSET + valueLength);
+    /** @type {object} the OWID the OWID library read, frozen */
+    this._owid = read.value._owid;
+    /** @type {number} the flags byte */
+    this._flags = read.value._flags;
+    /** @type {number} the licence id field, unsigned */
+    this._licenseId = read.value._licenseId;
+    /** @type {Uint8Array} this identifier's own copy of the value bytes */
+    this._hash = read.value._hash;
   }
 
   /**
@@ -137,40 +184,93 @@ class FodId {
   }
 
   /**
-   * Parses a 51Did from its base64-encoded OWID string. Both base64
+   * Reads a 51Did from its base64 form without throwing. Both base64
    * alphabets are accepted, the standard one the cloud issues and the
-   * URL-safe one a page uses in a link, with or without padding. The
+   * URL-safe one a page uses in a link, with or without padding. The value
+   * may be anything at all, because a 51Did arrives from outside and
+   * failing to be one is an ordinary outcome. An absent value or an empty
+   * string is `MISSING_INPUT`, a value that is not a string is
+   * `INVALID_INPUT_TYPE`, and a reason from the OWID library is reported
+   * exactly as the OWID library reported it.
+   *
+   * A successful read says the bytes are a structurally valid 51Did. It
+   * fetches no key and checks no signature, so the identifier may still be
+   * a forgery. Call {@link FodId#verify} or {@link FodId#checkSignature}.
+   * @param {string} base64 the envelope in either base64 alphabet
+   * @returns {FodIdParseResult} a frozen result with `ok`, `value` and
+   * `status`
+   */
+  static tryParse (base64) {
+    return publicResult(readBase64(base64));
+  }
+
+  /**
+   * Reads a 51Did from the raw bytes of an OWID envelope without throwing.
+   * The buffer must hold exactly one envelope, as `owid.parseBytes`
+   * requires. An absent buffer or one of no bytes is `MISSING_INPUT`, a
+   * value that is not a byte array is `INVALID_INPUT_TYPE`, and a reason
+   * from the OWID library is reported exactly as the OWID library reported
+   * it. The bytes are copied, so changing the buffer afterwards does not
+   * change the identifier.
+   * @param {Uint8Array} buffer the envelope bytes
+   * @returns {FodIdParseResult} a frozen result with `ok`, `value` and
+   * `status`
+   */
+  static tryFromByteArray (buffer) {
+    return publicResult(readEnvelope(owid.parseBytes(buffer)));
+  }
+
+  /**
+   * Parses a 51Did from its base64-encoded OWID string, throwing when the
+   * value is not one. The same read as {@link FodId.tryParse}, for a caller
+   * who prefers an exception. Both base64 alphabets are accepted, and the
    * envelope is held in the standard form, so {@link FodId#asBase64}
    * returns the standard alphabet with padding whichever form was given.
    * @param {string} base64 the envelope in either base64 alphabet
-   * @returns {FodId} the parsed identifier
+   * @returns {FodId} the parsed identifier, whose signature has not been
+   * checked
+   * @throws {TypeError} when the value is not a string
+   * @throws {RangeError} when the payload is shorter than a 51Did of its
+   * type can be
+   * @throws {FodIdParseError} when the value is not an OWID, with the OWID
+   * library's status
    */
   static fromBase64 (base64) {
     if (typeof base64 !== 'string') {
       throw new TypeError('base64 must be a string');
     }
-    return new FodId(new owid(FodId.toStandardBase64(base64)));
+    return valueOrThrow(readBase64(base64));
   }
 
   /**
-   * Parses a 51Did from the raw bytes of an OWID envelope.
-   * @param {Uint8Array} buffer
-   * @returns {FodId}
+   * Parses a 51Did from the raw bytes of an OWID envelope, throwing when
+   * the bytes are not one. The same read as {@link FodId.tryFromByteArray}.
+   * @param {Uint8Array} buffer the envelope bytes
+   * @returns {FodId} the parsed identifier, whose signature has not been
+   * checked
+   * @throws {TypeError} when the value is not a Uint8Array
+   * @throws {RangeError} when the payload is shorter than a 51Did of its
+   * type can be
+   * @throws {FodIdParseError} when the bytes are not an OWID, with the OWID
+   * library's status
    */
   static fromByteArray (buffer) {
     if (!(buffer instanceof Uint8Array)) {
       throw new TypeError('buffer must be a Uint8Array');
     }
-    return new FodId(new owid(Buffer.from(buffer).toString('base64')));
+    return valueOrThrow(readEnvelope(owid.parseBytes(buffer)));
   }
 
   /**
-   * Promotes an already-parsed owid instance into a 51Did. The constructor
-   * **copies** the owid (re-parsed from its base64), not aliases it, so a
-   * FodId can never desync from its envelope if the caller later mutates the
-   * owid it passed in.
-   * @param {object} owidInstance
-   * @returns {FodId}
+   * Promotes an OWID the OWID library read into a 51Did. The OWID is not
+   * aliased. Its base64 is read again through the same walk as
+   * {@link FodId.fromBase64}, so the FodId can never disagree with its
+   * envelope.
+   * @param {object} owidInstance an OWID from `owid.parse` or
+   * `owid.parseBytes`
+   * @returns {FodId} the parsed identifier, whose signature has not been
+   * checked
+   * @throws {TypeError} when no OWID was given
    */
   static fromOwid (owidInstance) {
     if (owidInstance === null || owidInstance === undefined) {
@@ -215,7 +315,7 @@ class FodId {
 
   /** @returns {number} the OWID version. */
   get version () {
-    return this._owid.owid.version;
+    return this._owid.version;
   }
 
   /** @returns {string} the domain of the OWID creator. */
@@ -223,7 +323,10 @@ class FodId {
     return this._owid.domain;
   }
 
-  /** @returns {number} the OWID date as minutes since 2020-01-01 UTC. */
+  /**
+   * @returns {number} the OWID date as minutes since 2020-01-01 UTC, as an
+   * unsigned 32-bit number, the same value as {@link FodId#dateMinutes}.
+   */
   get date () {
     return this._owid.date;
   }
@@ -232,20 +335,22 @@ class FodId {
    * The envelope's own date as the unsigned 32-bit count of minutes since
    * 2020-01-01T00:00:00Z, exactly as the wire carries it. This is the value
    * the OWID `public-key?date=` parameter takes, and the integer to use when
-   * comparing creation times. The OWID library reads the field as a signed
-   * 32-bit number, so this getter forces the unsigned reading.
+   * comparing creation times. The OWID library now reads the field unsigned
+   * too, so {@link FodId#date} agrees with this getter. The getter is kept
+   * because callers were told to use it, and it still forces the unsigned
+   * reading should the field ever arrive signed.
    * @returns {number} minutes since 2020-01-01T00:00:00Z
    */
   get dateMinutes () {
     return this._owid.date >>> 0;
   }
 
-  /** @returns {Uint8Array} the OWID payload bytes. */
+  /** @returns {Uint8Array} a fresh copy of the OWID payload bytes. */
   get payload () {
-    return this._owid.owid.payload;
+    return this._owid.payload;
   }
 
-  /** @returns {Uint8Array} the 64-byte OWID signature. */
+  /** @returns {Uint8Array} a fresh copy of the 64-byte OWID signature. */
   get signature () {
     return this._owid.signature;
   }
@@ -273,15 +378,190 @@ class FodId {
   }
 
   /**
-   * Verifies the OWID signature against the supplied SPKI public key PEM. This
-   * is an explicit, separate step - construction never verifies. Asynchronous
-   * because it uses Web Crypto.
+   * Verifies the OWID signature against the supplied SPKI public key PEM,
+   * offline. This is an explicit, separate step, because no read verifies.
+   * Resolves true or false only when the signature was judged, and rejects
+   * when the question could not be answered (a key that cannot be imported,
+   * or no Web Crypto), because a caller told false would treat an outage as
+   * a forgery. {@link FodId#checkSignature} reports the same outcomes as
+   * named statuses. Asynchronous because it uses Web Crypto.
    * @param {string} publicPem the creator public key in SPKI PEM form
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} true when the signature is genuine for the
+   * key, false when it is not
    */
   verify (publicPem) {
     return this._owid.verifyWithPublicKey(publicPem, []);
   }
+
+  /**
+   * Verifies the OWID signature against the supplied SPKI public key PEM,
+   * offline, and reports the outcome as one of {@link FodId.SignatureStatus}
+   * so that "could not check" stays apart from "does not match". Only
+   * `SIGNATURE_INVALID` means the identifier should be distrusted.
+   * @param {string} publicPem the creator public key in SPKI PEM form
+   * @returns {Promise<{ok: boolean, status: string, message?: string,
+   * cause?: any}>} a frozen result carrying `ok`, `status` and, where the
+   * check could not be completed, a `message` and a `cause`
+   */
+  checkSignature (publicPem) {
+    return this._owid.checkSignatureWithPublicKey(publicPem, []);
+  }
+}
+
+/**
+ * Reads the 51Did fields out of an envelope payload, answering with a
+ * status rather than throwing. This is the one walk of the payload, shared
+ * by every surface that reads a 51Did. The type is read from the header and
+ * decides the least the payload must hold after the header. Anything beyond
+ * the value is a creator context section whose lengths belong to the cloud,
+ * so a longer payload is accepted whatever its length.
+ * @param {Uint8Array} payload the payload bytes
+ * @returns {{status: string, flags?: number, licenseId?: number,
+ * hash?: Uint8Array, length: number, required: number, type?: number}}
+ * `status` PARSED with the fields, or a 51Did status with the length the
+ * type needed
+ */
+function unpack (payload) {
+  const length = payload.length;
+  if (length < FodId.HEADER_LENGTH) {
+    return {
+      status: ParseStatus.PAYLOAD_TOO_SHORT,
+      length,
+      required: FodId.HEADER_LENGTH
+    };
+  }
+  const flags = payload[FodId.FLAGS_OFFSET];
+  // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
+  // does not produce a negative number.
+  const licenseId = (
+    payload[FodId.LICENSE_ID_OFFSET] |
+    (payload[FodId.LICENSE_ID_OFFSET + 1] << 8) |
+    (payload[FodId.LICENSE_ID_OFFSET + 2] << 16) |
+    (payload[FodId.LICENSE_ID_OFFSET + 3] << 24)
+  ) >>> 0;
+  const type = IdType.fromFlags(flags);
+  let valueLength;
+  if (type === IdType.RANDOM) {
+    valueLength = FodId.GUID_LENGTH;
+  } else if (type === IdType.RESERVED) {
+    // Not yet assigned, so read best-effort: whatever follows the header
+    // is the value.
+    valueLength = length - FodId.HEADER_LENGTH;
+  } else {
+    valueLength = FodId.HASH_LENGTH;
+  }
+  const required = FodId.HEADER_LENGTH + valueLength;
+  if (length < required) {
+    return {
+      status: ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH,
+      length,
+      required,
+      type
+    };
+  }
+  return {
+    status: ParseStatus.PARSED,
+    flags,
+    licenseId,
+    // slice() copies, so the stored value is this identifier's own.
+    hash: payload.slice(FodId.HASH_OFFSET, FodId.HASH_OFFSET + valueLength),
+    length,
+    required
+  };
+}
+
+/**
+ * Turns the OWID library's read into a 51Did read. An OWID failure is
+ * carried through with its status unchanged, and a success is then held to
+ * the 51Did payload rules. The identifier is built without the public
+ * constructor so that the payload is walked once.
+ * @param {object} read the result of `owid.parse` or `owid.parseBytes`
+ * @returns {{ok: boolean, value: FodId | null, status: string,
+ * detail?: object}} the read, with the payload lengths alongside a 51Did
+ * failure for the throwing surfaces' messages
+ */
+function readEnvelope (read) {
+  if (!read.ok) {
+    return { ok: false, value: null, status: read.status };
+  }
+  const unpacked = unpack(read.owid.payload);
+  if (unpacked.status !== ParseStatus.PARSED) {
+    return {
+      ok: false, value: null, status: unpacked.status, detail: unpacked
+    };
+  }
+  const fodId = Object.create(FodId.prototype);
+  fodId._owid = read.owid;
+  fodId._flags = unpacked.flags;
+  fodId._licenseId = unpacked.licenseId;
+  fodId._hash = unpacked.hash;
+  return { ok: true, value: fodId, status: ParseStatus.PARSED };
+}
+
+/**
+ * Reads a 51Did from base64 in either alphabet. Only a string is
+ * normalised, so anything else reaches the OWID library as it is and is
+ * reported by the OWID library's own rules for absent and wrongly typed
+ * input.
+ * @param {*} base64 whatever the caller gave
+ * @returns {{ok: boolean, value: FodId | null, status: string,
+ * detail?: object}} the read
+ */
+function readBase64 (base64) {
+  const normalised = typeof base64 === 'string'
+    ? FodId.toStandardBase64(base64)
+    : base64;
+  return readEnvelope(owid.parse(normalised));
+}
+
+/**
+ * The three facts a caller of a non-throwing surface is given, and nothing
+ * else, frozen.
+ * @param {{ok: boolean, value: FodId | null, status: string}} read the read
+ * @returns {FodIdParseResult} the result
+ */
+function publicResult (read) {
+  return Object.freeze({ ok: read.ok, value: read.value, status: read.status });
+}
+
+/**
+ * The identifier from a read, or the exception the throwing surfaces
+ * document for the failure.
+ * @param {{ok: boolean, value: FodId | null, status: string,
+ * detail?: object}} read the read
+ * @returns {FodId} the identifier
+ */
+function valueOrThrow (read) {
+  if (!read.ok) {
+    throw errorFor(read);
+  }
+  return read.value;
+}
+
+/**
+ * The exception for a failed read. The two 51Did payload statuses keep the
+ * RangeError this package has always thrown for them, and every OWID status
+ * is a FodIdParseError carrying the status. Each error carries `status` so
+ * the reason can be acted on without reading the message.
+ * @param {{status: string, detail?: object}} read the failed read
+ * @returns {Error} the error to throw
+ */
+function errorFor (read) {
+  let error;
+  if (read.status === ParseStatus.PAYLOAD_TOO_SHORT) {
+    error = new RangeError(
+      `51Did payload must be at least ${read.detail.required} bytes to ` +
+      `carry the flags and licence id, and ${read.detail.length} were given.`);
+  } else if (read.status === ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH) {
+    error = new RangeError(
+      `51Did payload for the ${IdType.name(read.detail.type)} type must be ` +
+      `at least ${read.detail.required} bytes, and ${read.detail.length} ` +
+      'were given.');
+  } else {
+    return new FodIdParseError(read.status);
+  }
+  error.status = read.status;
+  return error;
 }
 
 module.exports = FodId;
