@@ -5,6 +5,15 @@ param (
 
 Push-Location $RepoName
 
+# The jest below is the runner for the unit and integration stages of every
+# package in the repository, because the stages run jest once from this
+# root rather than from each package. It has to be jest 28 or later. Jest 27
+# copies a fixed list of globals into its node test sandbox and fetch is not
+# on that list, so under jest 27 a test sees no fetch even on Node 22, and
+# the 51Did integration test failed with "No fetch function is available"
+# from the DidClient constructor. Jest 28 and later give the sandbox the
+# runtime's own globals, which is what the fiftyone.pipeline.did package
+# already relies on through its devDependency on jest 29.
 $packageJSON = @"
 {
   "name": "pipeline-node",
@@ -32,8 +41,8 @@ $packageJSON = @"
     "eslint-plugin-n": "^15.0.0",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^6.0.0",
-    "jest": "^27.0.6",
-    "jest-junit": "^12.2.0",
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
     "mustache": "^4.0.1",
     "node-mocks-http": "^1.10.1",
     "uglify-js": "^3.8.1"
