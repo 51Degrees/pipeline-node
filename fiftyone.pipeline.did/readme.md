@@ -10,11 +10,13 @@ the 51Degrees Cloud service, and a client for everything a server does with a
 - The **envelope** is the data model that carries it: a signed OWID holding the
   version, domain, date, payload and signature. It changes byte-for-byte every
   time the cloud issues one.
-- The **value** is the stable, comparable part of the payload after the Flags
-  and License Id: a 32-byte SHA-256 for Probabilistic and HashedEmail
-  identifiers, or 16 GUID bytes for Random.
+- The **match key** is the stable, comparable part of the payload after the
+  Flags and License Id, a 32-byte SHA-256 for Probabilistic and HashedEmail
+  identifiers, or 16 GUID bytes for Random. Two 51Dids for the same inputs
+  share the same match key even though their envelopes differ.
 
-**Comparing two 51Dids means comparing their values, never their envelopes.**
+**Comparing two 51Dids means comparing their match keys, never their
+envelopes.**
 
 ## Payload layout
 
@@ -22,14 +24,14 @@ the 51Degrees Cloud service, and a client for everything a server does with a
 |-------:|-------:|------------|-------------------------------------------------|
 |      0 |      1 | Flags      | uint8: bits 0-2 usage, bits 6-7 identifier type |
 |      1 |      4 | LicenseId  | uint32 (little-endian), see below               |
-|      5 |  16/32 | Value      | SHA-256 (Probabilistic, HashedEmail) or GUID (Random) |
+|      5 |  16/32 | Match key  | SHA-256 (Probabilistic, HashedEmail) or GUID (Random) |
 
-| Bits 7-6 | `IdType`        | Value length | Least payload accepted |
-|---------:|-----------------|-------------:|-----------------------:|
-|     `00` | `PROBABILISTIC` |           32 |                     37 |
-|     `01` | `RANDOM`        |           16 |                     21 |
-|     `10` | `HASHED_EMAIL`  |           32 |                     37 |
-|     `11` | `RESERVED`      |    remainder |                      5 |
+| Bits 7-6 | `IdType`        | Match key length | Least payload accepted |
+|---------:|-----------------|-----------------:|-----------------------:|
+|     `00` | `PROBABILISTIC` |               32 |                     37 |
+|     `01` | `RANDOM`        |               16 |                     21 |
+|     `10` | `HASHED_EMAIL`  |               32 |                     37 |
+|     `11` | `RESERVED`      |        remainder |                      5 |
 
 Identifiers issued before the type tag existed have bits 6-7 zeroed and decode
 as `PROBABILISTIC`.
@@ -39,7 +41,7 @@ browser and connection it was created on) the four bytes at offset 1 hold an
 encrypted value that only 51Degrees can turn back into a licence identifier.
 `licenseId` is then the field's raw value and identifies nothing outside
 51Degrees. A payload longer than the least length carries the creator context
-after the value, and the reader accepts it as it accepts the base length. The
+after the match key, and the reader accepts it as it accepts the base length. The
 lengths of a context section belong to the cloud, so the reader checks only
 the lower bound for the identifier type, holds no upper bound of its own, and
 leaves anything longer for the cloud to judge. A reader built before a longer
@@ -99,10 +101,10 @@ OWID library's status, so a specific reason is never reduced to a general one.
 | `IMPLEMENTATION_CAPACITY_EXCEEDED` | OWID | The envelope is consistent but larger than this runtime can hold |
 | `MALFORMED_ENVELOPE` | OWID | Malformed in a way none of the above describes |
 | `PAYLOAD_TOO_SHORT` | 51Did | The payload is shorter than the 5 byte header (flags and licence id), so the type cannot be read |
-| `INVALID_TYPE_PAYLOAD_LENGTH` | 51Did | The header named a type and the payload is shorter than that type's value needs, being 21 bytes for Random and 37 for Probabilistic and HashedEmail |
+| `INVALID_TYPE_PAYLOAD_LENGTH` | 51Did | The header named a type and the payload is shorter than that type's match key needs, being 21 bytes for Random and 37 for Probabilistic and HashedEmail |
 
 A Reserved type is not yet assigned, so the reader accepts it at any length
-from the header up and exposes whatever follows the header as the value.
+from the header up and exposes whatever follows the header as the match key.
 
 ### The throwing surface
 
@@ -185,7 +187,7 @@ const fodId = FodId.fromBase64(base64FromCloudService);
 const flags = fodId.flags;
 const type = fodId.type;          // IdType.PROBABILISTIC / RANDOM / HASHED_EMAIL
 const licenseId = fodId.licenseId;
-const value = fodId.hash;         // Uint8Array: SHA-256 or GUID bytes, see type
+const matchKey = fodId.matchKey;  // Uint8Array: SHA-256 or GUID bytes, see type
 
 const domain = fodId.domain;
 const minutes = fodId.dateMinutes; // minutes since 2020-01-01T00:00:00Z
@@ -193,6 +195,10 @@ const verified = await fodId.verify(publicKeyPem);   // async (Web Crypto)
 const base64 = fodId.asBase64();      // standard alphabet with padding
 const inLink = fodId.asBase64Url();   // URL-safe alphabet, no padding
 ```
+
+`fodId.hash` remains as a deprecated alias of `matchKey` returning the same
+bytes, so existing callers keep working, and will be removed in a future
+release.
 
 `dateMinutes` is the envelope's own date as the unsigned 32-bit count of
 minutes since 2020-01-01T00:00:00Z, the value the OWID `public-key?date=`
@@ -236,8 +242,8 @@ const a = FodId.fromBase64(idprobglobalA);
 const b = FodId.fromBase64(idprobglobalB);
 
 // The envelope (date, signature, base64) differs across reissues.
-// The value inside the payload is stable - this is what you compare:
-const sameValue = Buffer.from(a.hash).equals(Buffer.from(b.hash));
+// The match key inside the payload is stable, and is what you compare.
+const sameMatchKey = Buffer.from(a.matchKey).equals(Buffer.from(b.matchKey));
 ```
 
 ## Verifying on your server

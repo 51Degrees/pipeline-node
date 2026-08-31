@@ -41,7 +41,7 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
   PAYLOAD_TOO_SHORT: 'PayloadTooShort',
   /**
    * The header was read and named a type, and the payload is shorter than
-   * the value that type carries after the header (16 GUID bytes for
+   * the match key that type carries after the header (16 GUID bytes for
    * Random, 32 hash bytes for Probabilistic and HashedEmail).
    */
   INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength'
@@ -64,11 +64,11 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
  *
  * A 51Did is described at three levels. The 51Did is the identifier as a
  * whole. The envelope is the signed OWID that carries it (version, domain,
- * date, payload, signature), re-issued fresh on every call. The value is the
- * stable, comparable part of the payload after the Flags and License Id,
- * exposed via {@link FodId#hash}. Two 51Dids for the same inputs share the
- * same value even though their envelopes differ. Compare values, never
- * envelopes.
+ * date, payload, signature), re-issued fresh on every call. The match key
+ * is the stable, comparable part of the payload after the Flags and License
+ * Id, exposed via {@link FodId#matchKey}. Two 51Dids for the same inputs
+ * share the same match key even though their envelopes differ. Compare
+ * match keys, never envelopes.
  *
  * Reading and verifying are two separate questions. {@link FodId.tryParse}
  * and {@link FodId.tryFromByteArray} answer whether the input is a
@@ -87,9 +87,15 @@ class FodId {
   static FLAGS_OFFSET = 0;
   static LICENSE_ID_OFFSET = 1;
   static LICENSE_ID_LENGTH = 4;
+  /** Byte offset of the match key field within the payload. */
   static HASH_OFFSET = 5;
+  /**
+   * Byte length of the match key field for Probabilistic and HashedEmail
+   * identifiers, being a SHA-256.
+   */
   static HASH_LENGTH = 32;
   static HEADER_LENGTH = 5;
+  /** Byte length of the GUID match key carried by Random identifiers. */
   static GUID_LENGTH = 16;
   static RANDOM_PAYLOAD_LENGTH = 21;
   static PAYLOAD_LENGTH = 37;
@@ -141,8 +147,8 @@ class FodId {
     this._flags = read.value._flags;
     /** @type {number} the licence id field, unsigned */
     this._licenseId = read.value._licenseId;
-    /** @type {Uint8Array} this identifier's own copy of the value bytes */
-    this._hash = read.value._hash;
+    /** @type {Uint8Array} this identifier's own copy of the match key bytes */
+    this._matchKey = read.value._matchKey;
   }
 
   /**
@@ -306,11 +312,28 @@ class FodId {
   }
 
   /**
-   * @returns {Uint8Array} a defensive copy of the value bytes (a 32-byte
-   * SHA-256, or 16 GUID bytes for Random) - the stable cache / dedup key.
+   * The match key, being the stable, comparable part of the payload after
+   * the Flags and License Id. A 32-byte SHA-256 for Probabilistic and
+   * HashedEmail identifiers, or 16 GUID bytes for Random. Two 51Dids for
+   * the same inputs share the same match key, so the match key is the
+   * cache and deduplication key.
+   * @returns {Uint8Array} a defensive copy of the match key bytes
+   */
+  get matchKey () {
+    return this._matchKey.slice();
+  }
+
+  /**
+   * Deprecated alias for {@link FodId#matchKey}. The stable, comparable
+   * part of a 51Did is now called the match key, mirroring the Model Terms
+   * for Marketing vocabulary. This alias will be removed in a future
+   * release.
+   * @deprecated Renamed to matchKey. This alias will be removed in a future
+   * release.
+   * @returns {Uint8Array} the same bytes as {@link FodId#matchKey}
    */
   get hash () {
-    return this._hash.slice();
+    return this.matchKey;
   }
 
   /** @returns {number} the OWID version. */
@@ -413,11 +436,11 @@ class FodId {
  * status rather than throwing. This is the one walk of the payload, shared
  * by every surface that reads a 51Did. The type is read from the header and
  * decides the least the payload must hold after the header. Anything beyond
- * the value is a creator context section whose lengths belong to the cloud,
- * so a longer payload is accepted whatever its length.
+ * the match key is a creator context section whose lengths belong to the
+ * cloud, so a longer payload is accepted whatever its length.
  * @param {Uint8Array} payload the payload bytes
  * @returns {{status: string, flags?: number, licenseId?: number,
- * hash?: Uint8Array, length: number, required: number, type?: number}}
+ * matchKey?: Uint8Array, length: number, required: number, type?: number}}
  * `status` PARSED with the fields, or a 51Did status with the length the
  * type needed
  */
@@ -440,17 +463,17 @@ function unpack (payload) {
     (payload[FodId.LICENSE_ID_OFFSET + 3] << 24)
   ) >>> 0;
   const type = IdType.fromFlags(flags);
-  let valueLength;
+  let matchKeyLength;
   if (type === IdType.RANDOM) {
-    valueLength = FodId.GUID_LENGTH;
+    matchKeyLength = FodId.GUID_LENGTH;
   } else if (type === IdType.RESERVED) {
-    // Not yet assigned, so read best-effort: whatever follows the header
-    // is the value.
-    valueLength = length - FodId.HEADER_LENGTH;
+    // Not yet assigned, so read best-effort, whatever follows the header
+    // is the match key.
+    matchKeyLength = length - FodId.HEADER_LENGTH;
   } else {
-    valueLength = FodId.HASH_LENGTH;
+    matchKeyLength = FodId.HASH_LENGTH;
   }
-  const required = FodId.HEADER_LENGTH + valueLength;
+  const required = FodId.HEADER_LENGTH + matchKeyLength;
   if (length < required) {
     return {
       status: ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH,
@@ -463,8 +486,9 @@ function unpack (payload) {
     status: ParseStatus.PARSED,
     flags,
     licenseId,
-    // slice() copies, so the stored value is this identifier's own.
-    hash: payload.slice(FodId.HASH_OFFSET, FodId.HASH_OFFSET + valueLength),
+    // slice() copies, so the stored match key is this identifier's own.
+    matchKey: payload.slice(
+      FodId.HASH_OFFSET, FodId.HASH_OFFSET + matchKeyLength),
     length,
     required
   };
@@ -494,7 +518,7 @@ function readEnvelope (read) {
   fodId._owid = read.owid;
   fodId._flags = unpacked.flags;
   fodId._licenseId = unpacked.licenseId;
-  fodId._hash = unpacked.hash;
+  fodId._matchKey = unpacked.matchKey;
   return { ok: true, value: fodId, status: ParseStatus.PARSED };
 }
 

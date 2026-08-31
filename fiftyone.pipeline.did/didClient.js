@@ -774,10 +774,10 @@ function dateOf (fodId) {
  * @returns {boolean} whether the length is acceptable
  */
 function payloadLengthValid (fodId) {
-  const valueLength = fodId.type === IdType.RANDOM
+  const matchKeyLength = fodId.type === IdType.RANDOM
     ? FodId.GUID_LENGTH
     : FodId.HASH_LENGTH;
-  return fodId.payload.length >= FodId.HEADER_LENGTH + valueLength;
+  return fodId.payload.length >= FodId.HEADER_LENGTH + matchKeyLength;
 }
 
 /**

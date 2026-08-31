@@ -28,7 +28,7 @@
  * an ECDSA P-256 key pair, sign a canonical 37-byte payload - then parses it
  * back and prints the three payload fields. It also shows the headline use
  * case: a 51Did is re-issued fresh on every call (the envelope, hence the
- * base64, changes), but the value (the Hash) is stable. Compare values, never
+ * base64, changes), but the match key is stable. Compare match keys, never
  * envelopes.
  */
 
@@ -94,22 +94,24 @@ async function run () {
   console.log('  Type      :', IdType.name(fodId.type));
   console.log('  Flags     : 0x' + fodId.flags.toString(16));
   console.log('  LicenseId :', fodId.licenseId);
-  console.log('  Hash      :', Buffer.from(fodId.hash).toString('hex'));
+  console.log('  Match key :', Buffer.from(fodId.matchKey).toString('hex'));
   console.log('  Verifies  :', await fodId.verify(publicPem));
 
-  // Re-issue the same payload at a later time: a separate envelope, same value.
+  // Re-issue the same payload at a later time. The envelope differs and the
+  // match key does not.
   const reissued = FodId.fromBase64(
     await issue(keyPair.privateKey, payload, DATE + 5));
   const sameEnvelope = fodId.asBase64() === reissued.asBase64();
-  const sameValue = Buffer.from(fodId.hash).equals(Buffer.from(reissued.hash));
+  const sameMatchKey = Buffer.from(fodId.matchKey)
+    .equals(Buffer.from(reissued.matchKey));
 
   console.log('\nSame payload, re-issued:');
   console.log('  Same envelope (base64) :', sameEnvelope);
-  console.log('  Same value (Hash)      :', sameValue);
+  console.log('  Same match key         :', sameMatchKey);
 
-  if (sameEnvelope || !sameValue) {
+  if (sameEnvelope || !sameMatchKey) {
     throw new Error(
-      'Expected a different envelope but the same value across reissues.');
+      'Expected a different envelope but the same match key across reissues.');
   }
 
   // A 51Did arrives from outside, so a value that is not one is an ordinary

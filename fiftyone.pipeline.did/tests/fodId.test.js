@@ -28,7 +28,7 @@ const {
   CANONICAL_FLAGS,
   CANONICAL_LICENSE_ID,
   DUMMY_SIG,
-  canonicalHash,
+  canonicalMatchKey,
   canonicalPayload,
   canonicalRandomPayload,
   envelopeBytes,
@@ -61,7 +61,7 @@ describe('FodId', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(DOMAIN);
   });
 
@@ -69,7 +69,7 @@ describe('FodId', () => {
     const fod = FodId.fromByteArray(envelopeBytes(canonicalPayload()));
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(DOMAIN);
   });
 
@@ -79,7 +79,7 @@ describe('FodId', () => {
     const fod = FodId.fromOwid(o);
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(o.domain);
     expect(fod.date).toBe(o.date);
     expect(fod.version).toBe(o.version);
@@ -124,13 +124,24 @@ describe('FodId', () => {
     expect(FodId.fromBase64(envelopeBase64(p)).flags).toBe(255);
   });
 
-  test('hash is a defensive copy', () => {
+  test('matchKey is a defensive copy', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+    const k = fod.matchKey;
+    k[0] = 0x00;
+    k[FodId.HASH_LENGTH - 1] = 0x00;
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
+    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
+  });
+
+  test('the deprecated hash getter returns the match key', () => {
+    const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+    expect(fod.hash).toEqual(fod.matchKey);
+    expect(fod.hash).toEqual(canonicalMatchKey());
+    // The alias hands out a copy too, so a caller cannot reach the stored
+    // bytes through the old name.
     const h = fod.hash;
     h[0] = 0x00;
-    h[FodId.HASH_LENGTH - 1] = 0x00;
-    expect(fod.hash).toEqual(canonicalHash());
-    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
   });
 
   test('payload one byte short throws', () => {
@@ -163,8 +174,8 @@ describe('FodId', () => {
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.hash).toEqual(canonicalHash());
-    expect(fod.hash.length).toBe(FodId.HASH_LENGTH);
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
+    expect(fod.matchKey.length).toBe(FodId.HASH_LENGTH);
   });
 
   test('a long context section and a long creator domain both parse', () => {
@@ -189,7 +200,7 @@ describe('FodId', () => {
     ]) {
       expect(fod.flags).toBe(CANONICAL_FLAGS);
       expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-      expect(fod.hash).toEqual(canonicalHash());
+      expect(fod.matchKey).toEqual(canonicalMatchKey());
       expect(fod.payload).toHaveLength(p.length);
     }
   });
@@ -203,7 +214,7 @@ describe('FodId', () => {
     ]) {
       const fod = FodId.fromBase64(spaced);
       expect(fod.asBase64()).toBe(expected.asBase64());
-      expect(fod.hash).toEqual(expected.hash);
+      expect(fod.matchKey).toEqual(expected.matchKey);
       expect(fod.licenseId).toBe(expected.licenseId);
       expect(fod.flags).toBe(expected.flags);
     }
@@ -223,7 +234,7 @@ describe('FodId', () => {
     const fod2 = FodId.fromBase64(fod1.asBase64());
     expect(fod2.flags).toBe(fod1.flags);
     expect(fod2.licenseId).toBe(fod1.licenseId);
-    expect(fod2.hash).toEqual(fod1.hash);
+    expect(fod2.matchKey).toEqual(fod1.matchKey);
     expect(fod2.domain).toBe(fod1.domain);
   });
 
@@ -249,10 +260,10 @@ describe('FodId', () => {
   test('Random 21-byte payload parses', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalRandomPayload()));
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.hash.length).toBe(FodId.GUID_LENGTH);
+    expect(fod.matchKey.length).toBe(FodId.GUID_LENGTH);
     const guid = new Uint8Array(FodId.GUID_LENGTH);
     for (let i = 0; i < guid.length; i++) { guid[i] = 0x40 + i; }
-    expect(fod.hash).toEqual(guid);
+    expect(fod.matchKey).toEqual(guid);
   });
 
   test('Random payload one byte short throws', () => {
@@ -266,7 +277,7 @@ describe('FodId', () => {
     p.fill(0xCC, FodId.RANDOM_PAYLOAD_LENGTH);
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RANDOM);
-    expect(fod.hash.length).toBe(FodId.GUID_LENGTH);
+    expect(fod.matchKey.length).toBe(FodId.GUID_LENGTH);
   });
 
   test('HashedEmail payload one byte short throws', () => {
@@ -279,7 +290,7 @@ describe('FodId', () => {
     p[FodId.FLAGS_OFFSET] = 0b1100_0000;
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RESERVED);
-    expect(fod.hash.length).toBe(0);
+    expect(fod.matchKey.length).toBe(0);
   });
 
   // ----- Gap tests (runbook section 6b) -----
@@ -292,7 +303,7 @@ describe('FodId', () => {
     const fa = FodId.fromBase64(a);
     const fb = FodId.fromBase64(b);
 
-    expect(fa.hash).toEqual(fb.hash);            // value is stable
+    expect(fa.matchKey).toEqual(fb.matchKey); // match key is stable
     expect(fa.date).not.toBe(fb.date);           // envelope differs
     expect(fa.signature).not.toEqual(fb.signature);
     expect(a).not.toBe(b);
@@ -304,7 +315,7 @@ describe('FodId', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
   });
 
   test('fromOwid is decoupled from the source owid', () => {
@@ -316,7 +327,7 @@ describe('FodId', () => {
     expect(Object.isFrozen(o)).toBe(true);
     o.payload[FodId.HASH_OFFSET] = 0x00; // writes into a copy
     expect(o.payload[FodId.HASH_OFFSET]).toBe(0x20);
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
   });
@@ -328,7 +339,7 @@ describe('FodId', () => {
     const fod = new FodId(o);
     expect(fod._owid).not.toBe(o);
     fod.payload[FodId.HASH_OFFSET] = 0x00; // writes into a copy
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
   });
@@ -345,7 +356,7 @@ describe('FodId', () => {
     const fod2 = FodId.fromByteArray(fod1.asByteArray());
     expect(fod2.flags).toBe(fod1.flags);
     expect(fod2.licenseId).toBe(fod1.licenseId);
-    expect(fod2.hash).toEqual(fod1.hash);
+    expect(fod2.matchKey).toEqual(fod1.matchKey);
     expect(fod2.domain).toBe(fod1.domain);
   });
 
@@ -376,7 +387,7 @@ describe('FodId', () => {
     for (const fod of [b, c]) {
       expect(fod.flags).toBe(a.flags);
       expect(fod.licenseId).toBe(a.licenseId);
-      expect(fod.hash).toEqual(a.hash);
+      expect(fod.matchKey).toEqual(a.matchKey);
       expect(fod.date).toBe(a.date);
       expect(fod.signature).toEqual(a.signature);
       // Held in the standard form whichever form was given.
@@ -393,7 +404,7 @@ describe('FodId', () => {
     expect(FodId.toStandardBase64(url)).toBe(standard);
     const back = FodId.fromBase64(url);
     expect(back.asBase64()).toBe(standard);
-    expect(back.hash).toEqual(fod.hash);
+    expect(back.matchKey).toEqual(fod.matchKey);
   });
 
   test('toStandardBase64 pads by length', () => {
@@ -517,7 +528,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     ]) {
       const fod = expectParsed(result);
       expect(fod.domain).toBe(LONG_DOMAIN);
-      expect(fod.hash).toEqual(canonicalHash());
+      expect(fod.matchKey).toEqual(canonicalMatchKey());
       expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     }
   });
@@ -535,7 +546,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
       const fromBytes = expectParsed(FodId.tryFromByteArray(bytes));
       for (const fod of [fromBase64, fromBytes]) {
         expect(fod.payload).toHaveLength(FodId.PAYLOAD_LENGTH + extra);
-        expect(fod.hash).toEqual(canonicalHash());
+        expect(fod.matchKey).toEqual(canonicalMatchKey());
         expect(fod.type).toBe(IdType.HASHED_EMAIL);
       }
     }
@@ -547,7 +558,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     p.fill(0x5A, FodId.RANDOM_PAYLOAD_LENGTH);
     const fod = expectParsed(FodId.tryParse(envelopeBase64(p)));
     expect(fod.type).toBe(IdType.RANDOM);
-    expect(fod.hash).toHaveLength(FodId.GUID_LENGTH);
+    expect(fod.matchKey).toHaveLength(FodId.GUID_LENGTH);
     expect(fod.payload).toHaveLength(p.length);
   });
 
@@ -596,7 +607,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
       p[FodId.FLAGS_OFFSET] = 0b1100_0000;
       const fod = expectParsed(FodId.tryParse(envelopeBase64(p)));
       expect(fod.type).toBe(IdType.RESERVED);
-      expect(fod.hash).toHaveLength(length - FodId.HEADER_LENGTH);
+      expect(fod.matchKey).toHaveLength(length - FodId.HEADER_LENGTH);
     }
     expectFailed(
       FodId.tryParse(envelopeBase64(Uint8Array.from([0b1100_0000, 0, 0]))),
@@ -706,7 +717,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     const bytes = envelopeBytes(canonicalPayload());
     const fod = expectParsed(FodId.tryFromByteArray(bytes));
     bytes.fill(0);
-    expect(fod.hash).toEqual(canonicalHash());
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(DOMAIN);
   });
 

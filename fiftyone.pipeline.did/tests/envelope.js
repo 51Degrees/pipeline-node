@@ -36,7 +36,7 @@ const CANONICAL_FLAGS = 0xA5; // HashedEmail type tag + usage bits
 const CANONICAL_LICENSE_ID = 0x12345678;
 const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 
-function canonicalHash () {
+function canonicalMatchKey () {
   const h = new Uint8Array(FodId.HASH_LENGTH);
   for (let i = 0; i < h.length; i++) { h[i] = 0x20 + i; }
   return h;
@@ -54,7 +54,7 @@ function canonicalPayload () {
   const p = new Uint8Array(FodId.PAYLOAD_LENGTH);
   p[FodId.FLAGS_OFFSET] = CANONICAL_FLAGS;
   writeLicenseId(p);
-  p.set(canonicalHash(), FodId.HASH_OFFSET);
+  p.set(canonicalMatchKey(), FodId.HASH_OFFSET);
   return p;
 }
 
@@ -159,7 +159,7 @@ module.exports = {
   CANONICAL_FLAGS,
   CANONICAL_LICENSE_ID,
   DUMMY_SIG,
-  canonicalHash,
+  canonicalMatchKey,
   canonicalPayload,
   canonicalRandomPayload,
   noSigBytes,

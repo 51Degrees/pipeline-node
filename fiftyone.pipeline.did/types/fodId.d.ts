@@ -15,11 +15,11 @@ export = FodId;
  *
  * A 51Did is described at three levels. The 51Did is the identifier as a
  * whole. The envelope is the signed OWID that carries it (version, domain,
- * date, payload, signature), re-issued fresh on every call. The value is the
- * stable, comparable part of the payload after the Flags and License Id,
- * exposed via {@link FodId#hash}. Two 51Dids for the same inputs share the
- * same value even though their envelopes differ. Compare values, never
- * envelopes.
+ * date, payload, signature), re-issued fresh on every call. The match key
+ * is the stable, comparable part of the payload after the Flags and License
+ * Id, exposed via {@link FodId#matchKey}. Two 51Dids for the same inputs
+ * share the same match key even though their envelopes differ. Compare
+ * match keys, never envelopes.
  *
  * Reading and verifying are two separate questions. {@link FodId.tryParse}
  * and {@link FodId.tryFromByteArray} answer whether the input is a
@@ -38,9 +38,15 @@ declare class FodId {
     static FLAGS_OFFSET: number;
     static LICENSE_ID_OFFSET: number;
     static LICENSE_ID_LENGTH: number;
+    /** Byte offset of the match key field within the payload. */
     static HASH_OFFSET: number;
+    /**
+     * Byte length of the match key field for Probabilistic and HashedEmail
+     * identifiers, being a SHA-256.
+     */
     static HASH_LENGTH: number;
     static HEADER_LENGTH: number;
+    /** Byte length of the GUID match key carried by Random identifiers. */
     static GUID_LENGTH: number;
     static RANDOM_PAYLOAD_LENGTH: number;
     static PAYLOAD_LENGTH: number;
@@ -170,8 +176,8 @@ declare class FodId {
     _flags: number;
     /** @type {number} the licence id field, unsigned */
     _licenseId: number;
-    /** @type {Uint8Array} this identifier's own copy of the value bytes */
-    _hash: Uint8Array;
+    /** @type {Uint8Array} this identifier's own copy of the match key bytes */
+    _matchKey: Uint8Array;
     /** @returns {number} the 1-byte usage flags bit-mask (0-255). */
     get flags(): number;
     /** @returns {number} the IdType carried in bits 6-7 of the flags. */
@@ -190,8 +196,22 @@ declare class FodId {
      */
     get licenseId(): number;
     /**
-     * @returns {Uint8Array} a defensive copy of the value bytes (a 32-byte
-     * SHA-256, or 16 GUID bytes for Random) - the stable cache / dedup key.
+     * The match key, being the stable, comparable part of the payload after
+     * the Flags and License Id. A 32-byte SHA-256 for Probabilistic and
+     * HashedEmail identifiers, or 16 GUID bytes for Random. Two 51Dids for
+     * the same inputs share the same match key, so the match key is the
+     * cache and deduplication key.
+     * @returns {Uint8Array} a defensive copy of the match key bytes
+     */
+    get matchKey(): Uint8Array;
+    /**
+     * Deprecated alias for {@link FodId#matchKey}. The stable, comparable
+     * part of a 51Did is now called the match key, mirroring the Model Terms
+     * for Marketing vocabulary. This alias will be removed in a future
+     * release.
+     * @deprecated Renamed to matchKey. This alias will be removed in a future
+     * release.
+     * @returns {Uint8Array} the same bytes as {@link FodId#matchKey}
      */
     get hash(): Uint8Array;
     /** @returns {number} the OWID version. */
