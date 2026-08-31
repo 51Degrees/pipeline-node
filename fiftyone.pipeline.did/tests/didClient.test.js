@@ -54,6 +54,18 @@ const DAY = 24 * HOUR;
 // against obviously malformed input turns it away before it does any work.
 const OVER_LONG = 'A'.repeat(8192);
 
+// Values the reader refuses, with the status the client names for each, so
+// the tests can show that nothing leaves the process for any of them.
+const MALFORMED = [
+  ['This is not valid Base64!@#', FodId.ParseStatus.INVALID_BASE64],
+  // Version 2 and a domain that never terminates, so the envelope ends
+  // part way through a field.
+  [Buffer.from([2, 0x61]).toString('base64'), FodId.ParseStatus.UNEXPECTED_END],
+  [envelopeBase64(new Uint8Array(2)), FodId.ParseStatus.PAYLOAD_TOO_SHORT],
+  [envelopeBase64(canonicalRandomPayload().slice(0, 20)),
+    FodId.ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH]
+];
+
 // Three weekly periods, Monday to Monday, as the cloud's generator writes.
 const START_1 = new Date('2026-08-03T00:00:00Z');
 const START_2 = new Date('2026-08-10T00:00:00Z');
@@ -475,6 +487,67 @@ describe('DidClient verifySignature', () => {
     expect(fetch.calls).toHaveLength(0);
   });
 
+  test('a malformed identifier is refused with the reader status before any key fetch', async () => {
+    const { client, fetch } = keyClient([]);
+    for (const [input, status] of MALFORMED) {
+      for (const call of [
+        () => client.verifySignature(input),
+        () => client.verifySignatureDetailed(input),
+        () => client.publicKeyFor(input)
+      ]) {
+        await expect(call()).rejects.toMatchObject({
+          name: 'DidArgumentError',
+          message: expect.stringContaining('(' + status + ')')
+        });
+      }
+    }
+    expect(fetch.calls).toHaveLength(0);
+  });
+
+  test('the length guard and the reader are separate checks', async () => {
+    // The guard is client policy on the encoded length, applied before the
+    // reader sees the value. A value under the guard that is not a 51Did
+    // is refused by the reader with its status, and a value over the guard
+    // is refused by the guard with its own message. Whitespace at either
+    // end is ignored by the guard as the reader ignores it, so a genuine
+    // identifier padded out with whitespace still passes both.
+    const { pairs, json } = await schedule();
+    const { client, fetch } = keyClient(json);
+    await expect(client.verifySignature('*'.repeat(4000)))
+      .rejects.toMatchObject({
+        message: expect.stringContaining(FodId.ParseStatus.INVALID_BASE64)
+      });
+    await expect(client.verifySignature(OVER_LONG))
+      .rejects.toMatchObject({
+        message: 'The value is longer than this client will read as a 51Did.'
+      });
+    const genuine = await signedAt(pairs[1], new Date(START_2.getTime() + DAY));
+    const spaced = genuine.asBase64() + ' '.repeat(8192);
+    await expect(client.verifySignature(spaced)).resolves.toBe(true);
+    const inner = genuine.asBase64() + '\n';
+    await expect(client.verifySignature(inner)).resolves.toBe(true);
+    const padded = ' '.repeat(4096) + genuine.asBase64Url();
+    await expect(client.verifySignature(padded)).resolves.toBe(true);
+    expect(fetch.calls).toHaveLength(1);
+  });
+
+  test('a key list that cannot be fetched is an error, never an invalid signature', async () => {
+    const { pairs } = await schedule();
+    const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY));
+    const fetch = fakeFetch(() => response(503, 'unavailable'));
+    const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+    await expect(client.verifySignatureDetailed(fod)).rejects.toMatchObject({
+      name: 'DidClientError', statusCode: 503
+    });
+    await expect(client.verifySignature(fod))
+      .rejects.toBeInstanceOf(DidClientError);
+    const unreachable = fakeFetch(() => { throw new TypeError('fetch failed'); });
+    const offline = new DidClient({
+      resourceKey: RESOURCE, endpoint: ENDPOINT, fetch: unreachable
+    });
+    await expect(offline.verifySignature(fod)).rejects.toThrow('fetch failed');
+  });
+
   test('a value that is neither FodId nor string is refused', async () => {
     const { json } = await schedule();
     const { client } = keyClient(json);
@@ -532,16 +605,30 @@ describe('DidClient verify (cloud)', () => {
   });
 
   test('400 errors raises DidArgumentError with the cloud message', async () => {
+    // A value that reads as a 51Did here can still be refused by the cloud,
+    // which then answers with its own message and is relayed as given.
     const { client } = verifyClient(400, {
       errors: ['Value for 51did is not a valid Base64-encoded 51Did: \'x\'.']
     });
-    await expect(client.verify('x')).rejects.toMatchObject({
+    await expect(client.verify(fod)).rejects.toMatchObject({
       name: 'DidArgumentError',
       statusCode: 400,
       message: 'Value for 51did is not a valid Base64-encoded 51Did: \'x\'.'
     });
-    await expect(client.verify('x')).rejects.toBeInstanceOf(DidArgumentError);
-    await expect(client.verify('x')).rejects.toBeInstanceOf(DidClientError);
+    await expect(client.verify(fod)).rejects.toBeInstanceOf(DidArgumentError);
+    await expect(client.verify(fod)).rejects.toBeInstanceOf(DidClientError);
+  });
+
+  test('a malformed identifier is refused with the reader status before any request', async () => {
+    const { client, fetch } = verifyClient(200, { valid: true });
+    for (const [input, status] of MALFORMED) {
+      await expect(client.verify(input)).rejects.toMatchObject({
+        name: 'DidArgumentError',
+        statusCode: undefined,
+        message: expect.stringContaining('(' + status + ')')
+      });
+    }
+    expect(fetch.calls).toHaveLength(0);
   });
 
   test('another status raises DidClientError', async () => {
@@ -749,14 +836,29 @@ describe('DidClient redeem', () => {
   });
 
   test('400 errors raises DidArgumentError with the cloud message', async () => {
+    // A value that reads as a 51Did here can still be refused by the cloud,
+    // which then answers with its own message and is relayed as given.
     const { client } = redeemClient(400, {
       errors: ['Value for 51did is not a valid Base64-encoded 51Did: \'x\'.']
     });
-    await expect(client.redeem('x', RESULT, CHALLENGE)).rejects.toMatchObject({
+    await expect(client.redeem(fod, RESULT, CHALLENGE)).rejects.toMatchObject({
       name: 'DidArgumentError',
       statusCode: 400,
       message: 'Value for 51did is not a valid Base64-encoded 51Did: \'x\'.'
     });
+  });
+
+  test('a malformed identifier is refused with the reader status before any request', async () => {
+    const { client, fetch } = redeemClient(200, { context: 'verified' });
+    for (const [input, status] of MALFORMED) {
+      await expect(client.redeem(input, RESULT, CHALLENGE))
+        .rejects.toMatchObject({
+          name: 'DidArgumentError',
+          statusCode: undefined,
+          message: expect.stringContaining('(' + status + ')')
+        });
+    }
+    expect(fetch.calls).toHaveLength(0);
   });
 
   test('404 raises DidNotSupportedError', async () => {

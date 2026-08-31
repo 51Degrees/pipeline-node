@@ -86,9 +86,10 @@ const readPage = () => readFileSync(join(__dirname, 'page.html'), 'utf8');
 const readCss = () => readFileSync(join(__dirname, 'examples-main.min.css'));
 
 /**
- * The text of an error, whatever was thrown. The OWID library throws
- * strings, fetch wraps the cause of a transport failure, and the cause is
- * the useful part since fetch itself only says that it failed.
+ * The text of an error, whatever was thrown. fetch wraps the cause of a
+ * transport failure, and the cause is the useful part since fetch itself
+ * only says that it failed, and anything else that is not an Error is
+ * printed as it is.
  * @param {any} error whatever was thrown
  * @returns {string} the message
  */
@@ -146,18 +147,19 @@ function sendJson (response, status, body) {
 function redeemRoute (client) {
   return async function redeem (url, response) {
     // The identifier arrives in the URL-safe alphabet from the page, which
-    // fromBase64 accepts alongside the standard one.
-    let fodId;
-    try {
-      fodId = FodId.fromBase64(url.searchParams.get('51did') || '');
-    } catch (error) {
+    // tryParse accepts alongside the standard one. A value that is not a
+    // 51Did is an ordinary outcome on a public route rather than an error,
+    // so the reader answers with a status and nothing is thrown.
+    const read = FodId.tryParse(url.searchParams.get('51did'));
+    if (!read.ok) {
       // The caller's own identifier, so naming the fault costs nothing,
       // which is the same 400 with an errors list the cloud gives.
       sendJson(response, 400, {
-        errors: ['51did is not a valid 51Did: ' + messageOf(error)]
+        errors: ['51did is not a valid 51Did (' + read.status + ').']
       });
       return;
     }
+    const fodId = read.value;
     try {
       // The signature checked here, offline, before the cloud is asked to
       // redeem anything, so a forged envelope is named by this server

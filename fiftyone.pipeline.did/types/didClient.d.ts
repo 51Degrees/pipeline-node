@@ -196,8 +196,9 @@ export class DidClient {
      * @param {FodId | string} fodId the identifier, or its base64 in either
      * alphabet
      * @returns {Promise<boolean>} whether the cloud found the signature valid
-     * @throws {DidArgumentError} when the cloud could not parse the value as
-     * a 51Did, with the cloud's message
+     * @throws {DidArgumentError} when the value is not a 51Did, refused here
+     * with the reader's status before any request is made, or when the cloud
+     * refuses it (HTTP 400), with the cloud's message
      * @throws {DidClientError} on any other answer than valid or invalid
      */
     verify(fodId: FodId | string): Promise<boolean>;
@@ -221,8 +222,9 @@ export class DidClient {
      * @param {string} [challenge] the single-use challenge given to the
      * verify endpoint, where one was
      * @returns {Promise<RedeemResult>} the typed outcome
-     * @throws {DidArgumentError} when the cloud could not parse the value as
-     * a 51Did (HTTP 400), with the cloud's message
+     * @throws {DidArgumentError} when the value is not a 51Did, refused here
+     * with the reader's status before any request is made, or when the cloud
+     * refuses it (HTTP 400), with the cloud's message
      * @throws {DidNotSupportedError} when the host does not offer the creator
      * context (HTTP 404)
      * @throws {DidClientError} on any other status

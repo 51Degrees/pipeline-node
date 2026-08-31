@@ -478,8 +478,9 @@ class DidClient {
    * @param {FodId | string} fodId the identifier, or its base64 in either
    * alphabet
    * @returns {Promise<boolean>} whether the cloud found the signature valid
-   * @throws {DidArgumentError} when the cloud could not parse the value as
-   * a 51Did, with the cloud's message
+   * @throws {DidArgumentError} when the value is not a 51Did, refused here
+   * with the reader's status before any request is made, or when the cloud
+   * refuses it (HTTP 400), with the cloud's message
    * @throws {DidClientError} on any other answer than valid or invalid
    */
   async verify (fodId) {
@@ -528,8 +529,9 @@ class DidClient {
    * @param {string} [challenge] the single-use challenge given to the
    * verify endpoint, where one was
    * @returns {Promise<RedeemResult>} the typed outcome
-   * @throws {DidArgumentError} when the cloud could not parse the value as
-   * a 51Did (HTTP 400), with the cloud's message
+   * @throws {DidArgumentError} when the value is not a 51Did, refused here
+   * with the reader's status before any request is made, or when the cloud
+   * refuses it (HTTP 400), with the cloud's message
    * @throws {DidNotSupportedError} when the host does not offer the creator
    * context (HTTP 404)
    * @throws {DidClientError} on any other status
@@ -695,20 +697,16 @@ function asFodId (value) {
   }
   if (typeof value === 'string') {
     ensureEncodedLength(value);
-    try {
-      return FodId.fromBase64(value);
-    } catch (error) {
-      throw new DidArgumentError(
-        'The value could not be read as a 51Did. ' + error.message);
-    }
+    return parseOrRefuse(value);
   }
   throw new TypeError('fodId must be a FodId or a base64 string');
 }
 
 /**
  * The text sent to the cloud for an identifier. A parsed identifier goes in
- * the URL-safe alphabet, which needs no further encoding, and a string goes
- * as given so the cloud can report its own parse error.
+ * the URL-safe alphabet, which needs no further encoding. A string is read
+ * here first, so a value that is not a 51Did is refused before any request
+ * is made, and then goes as given so the cloud sees what the page sent.
  * @param {FodId | string} value an identifier or its base64
  * @returns {string} the text to send
  */
@@ -718,9 +716,27 @@ function identifierText (value) {
   }
   if (typeof value === 'string' && value.length > 0) {
     ensureEncodedLength(value);
+    parseOrRefuse(value);
     return value;
   }
   throw new TypeError('fodId must be a FodId or a non-empty base64 string');
+}
+
+/**
+ * Reads a string as a 51Did, or refuses it as a DidArgumentError naming the
+ * reason. The reason is the reader's own status, so a caller sees why the
+ * value was refused without any key being fetched or any request made.
+ * @param {string} value the encoded identifier, already within the length
+ * guard
+ * @returns {FodId} the identifier
+ */
+function parseOrRefuse (value) {
+  const read = FodId.tryParse(value);
+  if (!read.ok) {
+    throw new DidArgumentError(
+      'The value could not be read as a 51Did (' + read.status + ').');
+  }
+  return read.value;
 }
 
 /**
@@ -749,7 +765,11 @@ function dateOf (fodId) {
  * Whether the payload is at least the base length for its type, being five
  * header bytes plus a 32 byte match key, or 16 for a Random identifier.
  * Anything beyond the base is a creator context section, whose exact
- * lengths belong to the cloud, so any longer payload is accepted here.
+ * lengths belong to the cloud, so any longer payload is accepted here. The
+ * reader already refuses a Probabilistic, HashedEmail or Random payload
+ * shorter than its base, so in practice only a Reserved identifier, which
+ * the reader accepts at any length from the header up, reaches this check
+ * with too few bytes.
  * @param {FodId} fodId the identifier
  * @returns {boolean} whether the length is acceptable
  */
