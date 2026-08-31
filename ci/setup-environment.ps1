@@ -14,6 +14,15 @@ Push-Location $RepoName
 # from the DidClient constructor. Jest 28 and later give the sandbox the
 # runtime's own globals, which is what the fiftyone.pipeline.did package
 # already relies on through its devDependency on jest 29.
+#
+# The test patterns in the two scripts are wrapped in escaped double quotes
+# and not single quotes. On Windows npm runs scripts through cmd.exe, which
+# passes single quotes through as part of the argument, so jest received the
+# pattern with the quote characters attached. Jest 27 still matched the
+# integration files that way, whilst jest 29 on the Windows runners answered
+# "No tests found" with "testMatch: '**/*integration*.js' - 0 matches", and
+# the unit script's ignore pattern silently stopped excluding the integration
+# files. Double quotes are removed by every shell npm uses.
 $packageJSON = @"
 {
   "name": "pipeline-node",
@@ -22,8 +31,8 @@ $packageJSON = @"
   "main": "index.js",
   "types": "types/index.d.ts",
   "scripts": {
-    "unit-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testPathIgnorePatterns '.*integration.*'",
-    "integration-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testMatch '**/*integration*.js'",
+    "unit-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testPathIgnorePatterns \".*integration.*\"",
+    "integration-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testMatch \"**/*integration*.js\"",
     "lint": "eslint . --ext .js",
     "tsc": "tsc -b --force"
   },
