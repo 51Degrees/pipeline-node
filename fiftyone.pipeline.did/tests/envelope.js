@@ -37,7 +37,7 @@ const CANONICAL_LICENSE_ID = 0x12345678;
 const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 
 function canonicalMatchKey () {
-  const h = new Uint8Array(FodId.HASH_LENGTH);
+  const h = new Uint8Array(FodId.MATCH_KEY_LENGTH);
   for (let i = 0; i < h.length; i++) { h[i] = 0x20 + i; }
   return h;
 }
@@ -54,7 +54,7 @@ function canonicalPayload () {
   const p = new Uint8Array(FodId.PAYLOAD_LENGTH);
   p[FodId.FLAGS_OFFSET] = CANONICAL_FLAGS;
   writeLicenseId(p);
-  p.set(canonicalMatchKey(), FodId.HASH_OFFSET);
+  p.set(canonicalMatchKey(), FodId.MATCH_KEY_OFFSET);
   return p;
 }
 
@@ -63,7 +63,7 @@ function canonicalRandomPayload () {
   p[FodId.FLAGS_OFFSET] = (1 << 6) | 0b001; // Random tag + usage bits
   writeLicenseId(p);
   for (let i = 0; i < FodId.GUID_LENGTH; i++) {
-    p[FodId.HASH_OFFSET + i] = 0x40 + i;
+    p[FodId.MATCH_KEY_OFFSET + i] = 0x40 + i;
   }
   return p;
 }

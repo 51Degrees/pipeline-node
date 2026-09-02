@@ -776,7 +776,7 @@ function dateOf (fodId) {
 function payloadLengthValid (fodId) {
   const matchKeyLength = fodId.type === IdType.RANDOM
     ? FodId.GUID_LENGTH
-    : FodId.HASH_LENGTH;
+    : FodId.MATCH_KEY_LENGTH;
   return fodId.payload.length >= FodId.HEADER_LENGTH + matchKeyLength;
 }
 
