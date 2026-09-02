@@ -104,4 +104,8 @@ public
 # DynamoDB Local files
 .dynamodb/
 package-lock.json
+
+# Test reporter output from the root harness scripts
+junit.xml
+test-results/
 .vscode/

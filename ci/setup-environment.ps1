@@ -3,81 +3,32 @@ param (
     [string]$RepoName
 )
 
-Push-Location $RepoName
-
-# The jest below is the runner for the unit and integration stages of every
-# package in the repository, because the stages run jest once from this
-# root rather than from each package. It has to be jest 28 or later. Jest 27
-# copies a fixed list of globals into its node test sandbox and fetch is not
-# on that list, so under jest 27 a test sees no fetch even on Node 22, and
-# the 51Did integration test failed with "No fetch function is available"
-# from the DidClient constructor. Jest 28 and later give the sandbox the
-# runtime's own globals, which is what the fiftyone.pipeline.did package
-# already relies on through its devDependency on jest 29.
+# The repository root carries its own package.json, which is the harness that
+# lets jest, tsc and eslint run once from the root against the local source
+# instead of against published packages. It used to be written out here on
+# every run, which meant the lint tooling existed only inside this script and
+# nobody could run npm run lint from a clone. It is now checked in, and
+# ./node/setup-environment.ps1 below installs it with npm install.
 #
-# The test patterns in the two scripts are wrapped in escaped double quotes
-# and not single quotes. On Windows npm runs scripts through cmd.exe, which
-# passes single quotes through as part of the argument, so jest received the
-# pattern with the quote characters attached. Jest 27 still matched the
-# integration files that way, whilst jest 29 on the Windows runners answered
-# "No tests found" with "testMatch: '**/*integration*.js' - 0 matches", and
-# the unit script's ignore pattern silently stopped excluding the integration
-# files. Double quotes are removed by every shell npm uses.
-$packageJSON = @"
-{
-  "name": "pipeline-node",
-  "version": "1.0.0",
-  "description": "Temporary package to allow all tests to run using the local code as dependencies",
-  "main": "index.js",
-  "types": "types/index.d.ts",
-  "scripts": {
-    "unit-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testPathIgnorePatterns \".*integration.*\"",
-    "integration-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testMatch \"**/*integration*.js\"",
-    "lint": "eslint . --ext .js",
-    "tsc": "tsc -b --force"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/51Degrees/pipeline-node"
-  },
-  "author": "51Degrees Engineering <engineering@51degrees.com>",
-  "dependencies": {
-    "eslint": "8.57.0",
-    "eslint-config-standard": "^17.0.0",
-    "eslint-plugin-import": "^2.26.0",
-    "eslint-plugin-jest": "^23.13.2",
-    "eslint-plugin-jsdoc": "^38.1.6",
-    "eslint-plugin-n": "^15.0.0",
-    "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^6.0.0",
-    "jest": "^29.7.0",
-    "jest-junit": "^16.0.0",
-    "mustache": "^4.0.1",
-    "node-mocks-http": "^1.10.1",
-    "uglify-js": "^3.8.1"
-  },
-  "jest": {
-    "setupFilesAfterEnv": [
-      "./setup.js"
-    ]
-  },
-  "devDependencies": {
-    "typescript": "^5.4.5"
-  }
-}
-"@
-
-New-Item -ItemType File -Path "package.json" -Force | Out-Null
-Set-Content -Path "package.json" -Value $packageJSON
-Write-Output "Package configuration file created successfully."
-
-Pop-Location
+# Two things about that file are easy to undo by accident.
+#
+# The jest it pins has to be 28 or later. Jest 27 copies a fixed list of
+# globals into its node test sandbox and fetch is not on that list, so under
+# jest 27 a test sees no fetch even on Node 22, and the 51Did integration test
+# failed with "No fetch function is available" from the DidClient constructor.
+# Jest 28 and later give the sandbox the runtime's own globals, which is what
+# the fiftyone.pipeline.did package already relies on through its devDependency
+# on jest 29.
+#
+# The test patterns in the unit-test and integration-test scripts are wrapped
+# in escaped double quotes and not single quotes. On Windows npm runs scripts
+# through cmd.exe, which passes single quotes through as part of the argument,
+# so jest received the pattern with the quote characters attached. Jest 27
+# still matched the integration files that way, whilst jest 29 on the Windows
+# runners answered "No tests found" with "testMatch: '**/*integration*.js' -
+# 0 matches", and the unit script's ignore pattern silently stopped excluding
+# the integration files. Double quotes are removed by every shell npm uses.
 
 ./node/setup-environment.ps1 -RepoName $RepoName
 
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
-}
-
-
-
+exit $LASTEXITCODE

@@ -43,10 +43,11 @@ describe('FodId', () => {
   // ----- Current .NET coverage -----
 
   test('constants are internally consistent', () => {
-    expect(FodId.HASH_OFFSET + FodId.HASH_LENGTH).toBe(FodId.PAYLOAD_LENGTH);
+    expect(FodId.MATCH_KEY_OFFSET + FodId.MATCH_KEY_LENGTH)
+      .toBe(FodId.PAYLOAD_LENGTH);
     expect(FodId.LICENSE_ID_OFFSET + FodId.LICENSE_ID_LENGTH)
-      .toBe(FodId.HASH_OFFSET);
-    expect(FodId.HASH_OFFSET + FodId.GUID_LENGTH)
+      .toBe(FodId.MATCH_KEY_OFFSET);
+    expect(FodId.MATCH_KEY_OFFSET + FodId.GUID_LENGTH)
       .toBe(FodId.RANDOM_PAYLOAD_LENGTH);
   });
 
@@ -128,9 +129,9 @@ describe('FodId', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     const k = fod.matchKey;
     k[0] = 0x00;
-    k[FodId.HASH_LENGTH - 1] = 0x00;
+    k[FodId.MATCH_KEY_LENGTH - 1] = 0x00;
     expect(fod.matchKey).toEqual(canonicalMatchKey());
-    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
+    expect(fod.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
   });
 
   test('the deprecated hash getter returns the match key', () => {
@@ -175,7 +176,7 @@ describe('FodId', () => {
     expect(fod.flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
-    expect(fod.matchKey.length).toBe(FodId.HASH_LENGTH);
+    expect(fod.matchKey.length).toBe(FodId.MATCH_KEY_LENGTH);
   });
 
   test('a long context section and a long creator domain both parse', () => {
@@ -286,7 +287,7 @@ describe('FodId', () => {
   });
 
   test('Reserved header-only payload parses', () => {
-    const p = new Uint8Array(FodId.HASH_OFFSET);
+    const p = new Uint8Array(FodId.MATCH_KEY_OFFSET);
     p[FodId.FLAGS_OFFSET] = 0b1100_0000;
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RESERVED);
@@ -304,7 +305,7 @@ describe('FodId', () => {
     const fb = FodId.fromBase64(b);
 
     expect(fa.matchKey).toEqual(fb.matchKey); // match key is stable
-    expect(fa.date).not.toBe(fb.date);           // envelope differs
+    expect(fa.date).not.toBe(fb.date); // envelope differs
     expect(fa.signature).not.toEqual(fb.signature);
     expect(a).not.toBe(b);
   });
@@ -325,11 +326,11 @@ describe('FodId', () => {
     const o = owid.parse(envelopeBase64(canonicalPayload())).owid;
     const fod = FodId.fromOwid(o);
     expect(Object.isFrozen(o)).toBe(true);
-    o.payload[FodId.HASH_OFFSET] = 0x00; // writes into a copy
-    expect(o.payload[FodId.HASH_OFFSET]).toBe(0x20);
+    o.payload[FodId.MATCH_KEY_OFFSET] = 0x00; // writes into a copy
+    expect(o.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.flags).toBe(CANONICAL_FLAGS);
-    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
+    expect(fod.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
   });
 
   test('constructor is decoupled from the source owid', () => {
@@ -338,10 +339,10 @@ describe('FodId', () => {
     const o = owid.parse(envelopeBase64(canonicalPayload())).owid;
     const fod = new FodId(o);
     expect(fod._owid).not.toBe(o);
-    fod.payload[FodId.HASH_OFFSET] = 0x00; // writes into a copy
+    fod.payload[FodId.MATCH_KEY_OFFSET] = 0x00; // writes into a copy
     expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.flags).toBe(CANONICAL_FLAGS);
-    expect(fod.payload[FodId.HASH_OFFSET]).toBe(0x20);
+    expect(fod.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
   });
 
   test('verify with the wrong key returns false', async () => {
@@ -367,9 +368,9 @@ describe('FodId', () => {
   function alphabetPayload () {
     const p = canonicalPayload();
     // 0xFB 0xFF 0xBF encodes to "+/+/" in standard base64.
-    p[FodId.HASH_OFFSET] = 0xFB;
-    p[FodId.HASH_OFFSET + 1] = 0xFF;
-    p[FodId.HASH_OFFSET + 2] = 0xBF;
+    p[FodId.MATCH_KEY_OFFSET] = 0xFB;
+    p[FodId.MATCH_KEY_OFFSET + 1] = 0xFF;
+    p[FodId.MATCH_KEY_OFFSET + 2] = 0xBF;
     return p;
   }
 

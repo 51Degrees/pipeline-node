@@ -39,10 +39,28 @@ declare class FodId {
     static LICENSE_ID_OFFSET: number;
     static LICENSE_ID_LENGTH: number;
     /** Byte offset of the match key field within the payload. */
-    static HASH_OFFSET: number;
+    static MATCH_KEY_OFFSET: number;
     /**
      * Byte length of the match key field for Probabilistic and HashedEmail
      * identifiers, being a SHA-256.
+     */
+    static MATCH_KEY_LENGTH: number;
+    /**
+     * Deprecated alias for {@link FodId.MATCH_KEY_OFFSET}. The stable,
+     * comparable part of a 51Did is now called the match key, mirroring the
+     * Model Terms for Marketing vocabulary. This alias will be removed in a
+     * future release.
+     * @deprecated Renamed to MATCH_KEY_OFFSET. This alias will be removed in
+     * a future release.
+     */
+    static HASH_OFFSET: number;
+    /**
+     * Deprecated alias for {@link FodId.MATCH_KEY_LENGTH}. The stable,
+     * comparable part of a 51Did is now called the match key, mirroring the
+     * Model Terms for Marketing vocabulary. This alias will be removed in a
+     * future release.
+     * @deprecated Renamed to MATCH_KEY_LENGTH. This alias will be removed in
+     * a future release.
      */
     static HASH_LENGTH: number;
     static HEADER_LENGTH: number;

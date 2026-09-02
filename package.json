@@ -1,0 +1,39 @@
+{
+  "name": "pipeline-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test and lint harness for the packages in this repository. It is never published. It exists so that jest, tsc and eslint can be run once from the repository root against the local source rather than against published packages.",
+  "scripts": {
+    "unit-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testPathIgnorePatterns \".*integration.*\"",
+    "integration-test": "jest --ci --reporters=jest-junit --reporters=default --coverage --coverageReporters=cobertura --testMatch \"**/*integration*.js\"",
+    "lint": "eslint . --ext .js",
+    "tsc": "tsc -b --force"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/51Degrees/pipeline-node"
+  },
+  "author": "51Degrees Engineering <engineering@51degrees.com>",
+  "license": "EUPL-1.2",
+  "jest": {
+    "setupFilesAfterEnv": [
+      "./setup.js"
+    ]
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-jest": "^23.13.2",
+    "eslint-plugin-jsdoc": "^38.1.6",
+    "eslint-plugin-n": "^15.0.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
+    "mustache": "^4.0.1",
+    "node-mocks-http": "^1.10.1",
+    "typescript": "^5.4.5",
+    "uglify-js": "^3.8.1"
+  }
+}

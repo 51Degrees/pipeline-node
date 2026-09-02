@@ -88,17 +88,35 @@ class FodId {
   static LICENSE_ID_OFFSET = 1;
   static LICENSE_ID_LENGTH = 4;
   /** Byte offset of the match key field within the payload. */
-  static HASH_OFFSET = 5;
+  static MATCH_KEY_OFFSET = 5;
   /**
    * Byte length of the match key field for Probabilistic and HashedEmail
    * identifiers, being a SHA-256.
    */
-  static HASH_LENGTH = 32;
-  static HEADER_LENGTH = 5;
+  static MATCH_KEY_LENGTH = 32;
+  /**
+   * Deprecated alias for {@link FodId.MATCH_KEY_OFFSET}. The stable,
+   * comparable part of a 51Did is now called the match key, mirroring the
+   * Model Terms for Marketing vocabulary. This alias will be removed in a
+   * future release.
+   * @deprecated Renamed to MATCH_KEY_OFFSET. This alias will be removed in
+   * a future release.
+   */
+  static HASH_OFFSET = FodId.MATCH_KEY_OFFSET;
+  /**
+   * Deprecated alias for {@link FodId.MATCH_KEY_LENGTH}. The stable,
+   * comparable part of a 51Did is now called the match key, mirroring the
+   * Model Terms for Marketing vocabulary. This alias will be removed in a
+   * future release.
+   * @deprecated Renamed to MATCH_KEY_LENGTH. This alias will be removed in
+   * a future release.
+   */
+  static HASH_LENGTH = FodId.MATCH_KEY_LENGTH;
+  static HEADER_LENGTH = FodId.MATCH_KEY_OFFSET;
   /** Byte length of the GUID match key carried by Random identifiers. */
   static GUID_LENGTH = 16;
   static RANDOM_PAYLOAD_LENGTH = 21;
-  static PAYLOAD_LENGTH = 37;
+  static PAYLOAD_LENGTH = FodId.MATCH_KEY_OFFSET + FodId.MATCH_KEY_LENGTH;
 
   /**
    * Why a read succeeded or failed, being the OWID library's statuses plus
@@ -471,7 +489,7 @@ function unpack (payload) {
     // is the match key.
     matchKeyLength = length - FodId.HEADER_LENGTH;
   } else {
-    matchKeyLength = FodId.HASH_LENGTH;
+    matchKeyLength = FodId.MATCH_KEY_LENGTH;
   }
   const required = FodId.HEADER_LENGTH + matchKeyLength;
   if (length < required) {
@@ -488,7 +506,7 @@ function unpack (payload) {
     licenseId,
     // slice() copies, so the stored match key is this identifier's own.
     matchKey: payload.slice(
-      FodId.HASH_OFFSET, FodId.HASH_OFFSET + matchKeyLength),
+      FodId.MATCH_KEY_OFFSET, FodId.MATCH_KEY_OFFSET + matchKeyLength),
     length,
     required
   };

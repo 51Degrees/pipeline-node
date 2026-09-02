@@ -50,7 +50,9 @@ function samplePayload () {
   p[FodId.LICENSE_ID_OFFSET + 1] = 0x56;
   p[FodId.LICENSE_ID_OFFSET + 2] = 0x34;
   p[FodId.LICENSE_ID_OFFSET + 3] = 0x12;
-  for (let i = 0; i < FodId.HASH_LENGTH; i++) { p[FodId.HASH_OFFSET + i] = 0x20 + i; }
+  for (let i = 0; i < FodId.MATCH_KEY_LENGTH; i++) {
+    p[FodId.MATCH_KEY_OFFSET + i] = 0x20 + i;
+  }
   return p;
 }
 
