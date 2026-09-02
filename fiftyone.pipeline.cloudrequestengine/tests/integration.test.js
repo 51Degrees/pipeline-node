@@ -38,7 +38,7 @@ const PipelineBuilder = require(pipelineBuilderPath);
 
 // The aligned _51DEGREES_RESOURCE_KEY environment variable is checked
 // first, then the legacy RESOURCE_KEY variable.
-const myResourceKey = process.env['_51DEGREES_RESOURCE_KEY'] ||
+const myResourceKey = process.env._51DEGREES_RESOURCE_KEY ||
   process.env.RESOURCE_KEY || '!!YOUR_RESOURCE_KEY!!';
 
 /**

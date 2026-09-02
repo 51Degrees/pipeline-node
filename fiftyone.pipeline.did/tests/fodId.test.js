@@ -305,7 +305,7 @@ describe('FodId', () => {
     const fb = FodId.fromBase64(b);
 
     expect(fa.matchKey).toEqual(fb.matchKey); // match key is stable
-    expect(fa.date).not.toBe(fb.date);           // envelope differs
+    expect(fa.date).not.toBe(fb.date); // envelope differs
     expect(fa.signature).not.toEqual(fb.signature);
     expect(a).not.toBe(b);
   });

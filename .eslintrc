@@ -12,13 +12,18 @@
     ],
     "globals": {
         "Atomics": "readonly",
-        "SharedArrayBuffer": "readonly",
-        "test": true,
-        "jest": true,
-        "expect": true
+        "SharedArrayBuffer": "readonly"
     },
+    "overrides": [
+        {
+            "files": ["**/tests/**/*.js", "**/*.test.js", "setup.js"],
+            "env": {
+                "jest": true
+            }
+        }
+    ],
     "parserOptions": {
-        "ecmaVersion": 2020
+        "ecmaVersion": 2022
     },
     "settings": {
         "jsdoc": {
