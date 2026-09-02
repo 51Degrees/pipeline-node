@@ -22,8 +22,8 @@ declare const IdType: Readonly<{
     fromFlags(flags: number): number;
     /**
      * The human-readable name of an IdType value.
-     * @param {number} type an IdType value
-     * @returns {string}
+     * @param {number} type an IdType value, being 0 to 3 as fromFlags returns
+     * @returns {string} the name of that type, for example "Probabilistic"
      */
     name(type: number): string;
 }>;
