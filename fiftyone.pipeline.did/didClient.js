@@ -69,6 +69,19 @@ const ContextResult = Object.freeze({
   NO_CONTEXT: 'nocontext',
   /** The service holds no secret covering the identifier's date. */
   NOT_CHECKABLE: 'notcheckable',
+  /**
+   * The service that checked the identifier could not complete the check,
+   * and the reason is that service rather than the identifier. It either
+   * compared nothing, or compared some factors and reports at least one as
+   * `misconfigured` in `factors`. Nothing a caller sends can produce it.
+   */
+  MISCONFIGURED: 'misconfigured',
+  /**
+   * The creation date is one the scheme could not have produced, being in
+   * the future or before the creator context scheme began, so the
+   * identifier is fabricated rather than the service being wrong.
+   */
+  INVALID_DATE: 'invaliddate',
   /** The sealed result was redeemed outside the freshness window. */
   EXPIRED: 'expired',
   /** The sealed result had already been redeemed on that instance. */
@@ -102,7 +115,13 @@ const SignatureResult = Object.freeze({
  */
 const FactorResult = Object.freeze({
   VERIFIED: 'verified',
-  MISMATCH: 'mismatch'
+  MISMATCH: 'mismatch',
+  /**
+   * The service that checked the identifier is not configured to determine
+   * this factor, so it could not have checked it for any request. This is
+   * NOT a mismatch and must not be read as one.
+   */
+  MISCONFIGURED: 'misconfigured'
 });
 
 /**
