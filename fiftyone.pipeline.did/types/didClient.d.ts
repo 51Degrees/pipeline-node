@@ -345,6 +345,8 @@ export const ContextResult: Readonly<{
     NO_CONTEXT: "nocontext";
     /** The service holds no secret covering the identifier's date. */
     NOT_CHECKABLE: "notcheckable";
+    MISCONFIGURED: "misconfigured";
+    INVALID_DATE: "invaliddate";
     /** The sealed result was redeemed outside the freshness window. */
     EXPIRED: "expired";
     /** The sealed result had already been redeemed on that instance. */
@@ -369,12 +371,14 @@ export const SignatureResult: Readonly<{
     UNKNOWN: "unknown";
 }>;
 /**
- * The outcome of one factor in a mismatch. The cloud reports `null` for a
+ * The outcome of one factor in a mismatch or a partly misconfigured
+ * result. The cloud reports `null` for a
  * factor that was not compared, which is passed through unchanged.
  */
 export const FactorResult: Readonly<{
     VERIFIED: "verified";
     MISMATCH: "mismatch";
+    MISCONFIGURED: "misconfigured";
 }>;
 /**
  * The reason a {@link DidClient#verifySignatureDetailed} answer was given.
