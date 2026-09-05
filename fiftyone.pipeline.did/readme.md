@@ -158,7 +158,7 @@ and `FodId.checkSignature()` run without contacting a network endpoint.
 
 The library is not on the npm registry, so `package.json` names it as a
 GitHub reference, which npm resolves by cloning the repository. The reference
-is `github:51Degrees/owid-js#8363541e`, the merged hardening commit on `main`
+is `github:51Degrees/owid-js#9aeb0d24`, the commit on `main` that carries the key selection fix
 of the [51Degrees/owid-js](https://github.com/51Degrees/owid-js) fork. That
 applies only when working in this repository, because the published
 `fiftyone.pipeline.did` package carries the OWID source inside its own
