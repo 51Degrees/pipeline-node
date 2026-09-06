@@ -36,7 +36,11 @@
  * usage granted, so that mistake cannot be made.
  *
  * The names match the cloud's id.usage values, non-marketing, standard and
- * personalized, and are the same in every 51Did package.
+ * personalized, and are the same in every 51Did package. The bits, and the
+ * rule that the highest granted usage is the answer, are specified once for
+ * all languages at
+ * https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md
+ * which is the authority rather than this comment.
  */
 const NAMES = ['None', 'NonMarketing', 'Standard', 'Personalized'];
 const ID_USAGE = [null, 'non-marketing', 'standard', 'personalized'];

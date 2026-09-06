@@ -21,6 +21,7 @@
  * ********************************************************************* */
 
 const FodId = require('./fodId');
+const layout = require('./internal/layout');
 const IdType = require('./idType');
 const packageVersion = require('./package.json').version;
 
@@ -777,7 +778,7 @@ function ensureEncodedLength (value) {
  * @returns {Date} the moment the envelope says it was created
  */
 function dateOf (fodId) {
-  return new Date(OWID_EPOCH_MS + fodId.dateMinutes * MINUTE_MS);
+  return new Date(OWID_EPOCH_MS + fodId.date * MINUTE_MS);
 }
 
 /**
@@ -794,9 +795,9 @@ function dateOf (fodId) {
  */
 function payloadLengthValid (fodId) {
   const matchKeyLength = fodId.type === IdType.RANDOM
-    ? FodId.GUID_LENGTH
-    : FodId.MATCH_KEY_LENGTH;
-  return fodId.payload.length >= FodId.HEADER_LENGTH + matchKeyLength;
+    ? layout.GUID_LENGTH
+    : layout.MATCH_KEY_LENGTH;
+  return fodId.payload.length >= layout.HEADER_LENGTH + matchKeyLength;
 }
 
 /**

@@ -40,6 +40,7 @@ const {
   signedWith,
   minutesOf
 } = require('./envelope');
+const layout = require('../internal/layout');
 
 const RESOURCE = 'AQTestResourceKey';
 const LICENCE = 'TEST-LICENCE-KEY';
@@ -429,7 +430,7 @@ describe('DidClient verifySignature', () => {
     // A Reserved type parses at any length from the header up, so it is
     // the way to present a payload the cloud's length rule refuses.
     const short = new Uint8Array(20);
-    short[FodId.FLAGS_OFFSET] = 0b11000000;
+    short[layout.FLAGS_OFFSET] = 0b11000000;
     const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY), { payload: short });
     await expect(client.verifySignatureDetailed(fod)).resolves.toEqual({
       valid: false, reason: SignatureReason.LENGTH
@@ -449,9 +450,9 @@ describe('DidClient verifySignature', () => {
   test('true for a payload longer than the base (a context section)', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const withContext = new Uint8Array(FodId.PAYLOAD_LENGTH + 40);
+    const withContext = new Uint8Array(layout.PAYLOAD_LENGTH + 40);
     withContext.set(canonicalPayload());
-    withContext.fill(0x5A, FodId.PAYLOAD_LENGTH);
+    withContext.fill(0x5A, layout.PAYLOAD_LENGTH);
     const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY), {
       payload: withContext
     });
@@ -461,9 +462,9 @@ describe('DidClient verifySignature', () => {
   test('true for a long context section and a long creator domain', async () => {
     const { pairs, json } = await schedule();
     const { client } = keyClient(json);
-    const withContext = new Uint8Array(FodId.PAYLOAD_LENGTH + 200);
+    const withContext = new Uint8Array(layout.PAYLOAD_LENGTH + 200);
     withContext.set(canonicalPayload());
-    withContext.fill(0x5A, FodId.PAYLOAD_LENGTH);
+    withContext.fill(0x5A, layout.PAYLOAD_LENGTH);
     const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY), {
       payload: withContext,
       domain: 'a-self-hosted-container.example.internal.51degrees.com'

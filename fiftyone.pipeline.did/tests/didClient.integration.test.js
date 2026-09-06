@@ -66,7 +66,7 @@ live('DidClient against the cloud', () => {
 
   test('parses, verifies offline and verifies through the cloud', async () => {
     expect(fodId.version).toBe(3);
-    expect(fodId.dateMinutes).toBeGreaterThan(0);
+    expect(fodId.date).toBeGreaterThan(0);
     const key = await client.publicKeyFor(fodId);
     expect(key).not.toBeNull();
     expect(key.publicKey).toMatch(/BEGIN PUBLIC KEY/);

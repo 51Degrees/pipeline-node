@@ -21,6 +21,7 @@
  * ********************************************************************* */
 
 const owid = require('owid');
+const layout = require('./internal/layout');
 const IdType = require('./idType');
 const Usage = require('./usage');
 const FodIdParseError = require('./fodIdParseError');
@@ -83,42 +84,17 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
  * A FodId composes the OWID the OWID library read (holds it and delegates
  * the envelope fields to it). That OWID is frozen and hands out its byte
  * arrays as copies, so nothing a caller holds can change the identifier.
+ *
+ * Every field has a named accessor here, so nothing needs the payload
+ * bytes or their offsets. The byte layout itself is specified once for all
+ * languages, and that specification is the authority rather than this
+ * comment:
+ * https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md
+ *
+ * What each 51Did package offers on top of that layout is specified at:
+ * https://github.com/51Degrees/specifications/blob/main/did-specification/package-surface.md
  */
 class FodId {
-  static FLAGS_OFFSET = 0;
-  static LICENSE_ID_OFFSET = 1;
-  static LICENSE_ID_LENGTH = 4;
-  /** Byte offset of the match key field within the payload. */
-  static MATCH_KEY_OFFSET = 5;
-  /**
-   * Byte length of the match key field for Probabilistic and HashedEmail
-   * identifiers, being a SHA-256.
-   */
-  static MATCH_KEY_LENGTH = 32;
-  /**
-   * Deprecated alias for {@link FodId.MATCH_KEY_OFFSET}. The stable,
-   * comparable part of a 51Did is now called the match key, mirroring the
-   * Model Terms for Marketing vocabulary. This alias will be removed in a
-   * future release.
-   * @deprecated Renamed to MATCH_KEY_OFFSET. This alias will be removed in
-   * a future release.
-   */
-  static HASH_OFFSET = FodId.MATCH_KEY_OFFSET;
-  /**
-   * Deprecated alias for {@link FodId.MATCH_KEY_LENGTH}. The stable,
-   * comparable part of a 51Did is now called the match key, mirroring the
-   * Model Terms for Marketing vocabulary. This alias will be removed in a
-   * future release.
-   * @deprecated Renamed to MATCH_KEY_LENGTH. This alias will be removed in
-   * a future release.
-   */
-  static HASH_LENGTH = FodId.MATCH_KEY_LENGTH;
-  static HEADER_LENGTH = FodId.MATCH_KEY_OFFSET;
-  /** Byte length of the GUID match key carried by Random identifiers. */
-  static GUID_LENGTH = 16;
-  static RANDOM_PAYLOAD_LENGTH = 21;
-  static PAYLOAD_LENGTH = FodId.MATCH_KEY_OFFSET + FodId.MATCH_KEY_LENGTH;
-
   /**
    * Why a read succeeded or failed, being the OWID library's statuses plus
    * `PAYLOAD_TOO_SHORT` and `INVALID_TYPE_PAYLOAD_LENGTH`. Frozen.
@@ -304,11 +280,6 @@ class FodId {
     return new FodId(owidInstance);
   }
 
-  /** @returns {number} the 1-byte usage flags bit-mask (0-255). */
-  get flags () {
-    return this._flags;
-  }
-
   /** @returns {number} the IdType carried in bits 6-7 of the flags. */
   get type () {
     return IdType.fromFlags(this._flags);
@@ -362,19 +333,6 @@ class FodId {
     return this._matchKey.slice();
   }
 
-  /**
-   * Deprecated alias for {@link FodId#matchKey}. The stable, comparable
-   * part of a 51Did is now called the match key, mirroring the Model Terms
-   * for Marketing vocabulary. This alias will be removed in a future
-   * release.
-   * @deprecated Renamed to matchKey. This alias will be removed in a future
-   * release.
-   * @returns {Uint8Array} the same bytes as {@link FodId#matchKey}
-   */
-  get hash () {
-    return this.matchKey;
-  }
-
   /** @returns {number} the OWID version. */
   get version () {
     return this._owid.version;
@@ -386,24 +344,13 @@ class FodId {
   }
 
   /**
-   * @returns {number} the OWID date as minutes since 2020-01-01 UTC, as an
-   * unsigned 32-bit number, the same value as {@link FodId#dateMinutes}.
-   */
-  get date () {
-    return this._owid.date;
-  }
-
-  /**
-   * The envelope's own date as the unsigned 32-bit count of minutes since
-   * 2020-01-01T00:00:00Z, exactly as the wire carries it. This is the value
-   * the OWID `public-key?date=` parameter takes, and the integer to use when
-   * comparing creation times. The OWID library now reads the field unsigned
-   * too, so {@link FodId#date} agrees with this getter. The getter is kept
-   * because callers were told to use it, and it still forces the unsigned
-   * reading should the field ever arrive signed.
+   * The envelope's own date, being the count of minutes since
+   * 2020-01-01T00:00:00Z exactly as the wire carries it, read as an
+   * unsigned 32-bit number. This is the integer to compare when asking
+   * which of two identifiers was issued first.
    * @returns {number} minutes since 2020-01-01T00:00:00Z
    */
-  get dateMinutes () {
+  get date () {
     return this._owid.date >>> 0;
   }
 
@@ -485,34 +432,34 @@ class FodId {
  */
 function unpack (payload) {
   const length = payload.length;
-  if (length < FodId.HEADER_LENGTH) {
+  if (length < layout.HEADER_LENGTH) {
     return {
       status: ParseStatus.PAYLOAD_TOO_SHORT,
       length,
-      required: FodId.HEADER_LENGTH
+      required: layout.HEADER_LENGTH
     };
   }
-  const flags = payload[FodId.FLAGS_OFFSET];
+  const flags = payload[layout.FLAGS_OFFSET];
   // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
   // does not produce a negative number.
   const licenseId = (
-    payload[FodId.LICENSE_ID_OFFSET] |
-    (payload[FodId.LICENSE_ID_OFFSET + 1] << 8) |
-    (payload[FodId.LICENSE_ID_OFFSET + 2] << 16) |
-    (payload[FodId.LICENSE_ID_OFFSET + 3] << 24)
+    payload[layout.LICENSE_ID_OFFSET] |
+    (payload[layout.LICENSE_ID_OFFSET + 1] << 8) |
+    (payload[layout.LICENSE_ID_OFFSET + 2] << 16) |
+    (payload[layout.LICENSE_ID_OFFSET + 3] << 24)
   ) >>> 0;
   const type = IdType.fromFlags(flags);
   let matchKeyLength;
   if (type === IdType.RANDOM) {
-    matchKeyLength = FodId.GUID_LENGTH;
+    matchKeyLength = layout.GUID_LENGTH;
   } else if (type === IdType.RESERVED) {
     // Not yet assigned, so read best-effort, whatever follows the header
     // is the match key.
-    matchKeyLength = length - FodId.HEADER_LENGTH;
+    matchKeyLength = length - layout.HEADER_LENGTH;
   } else {
-    matchKeyLength = FodId.MATCH_KEY_LENGTH;
+    matchKeyLength = layout.MATCH_KEY_LENGTH;
   }
-  const required = FodId.HEADER_LENGTH + matchKeyLength;
+  const required = layout.HEADER_LENGTH + matchKeyLength;
   if (length < required) {
     return {
       status: ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH,
@@ -527,7 +474,7 @@ function unpack (payload) {
     licenseId,
     // slice() copies, so the stored match key is this identifier's own.
     matchKey: payload.slice(
-      FodId.MATCH_KEY_OFFSET, FodId.MATCH_KEY_OFFSET + matchKeyLength),
+      layout.MATCH_KEY_OFFSET, layout.MATCH_KEY_OFFSET + matchKeyLength),
     length,
     required
   };

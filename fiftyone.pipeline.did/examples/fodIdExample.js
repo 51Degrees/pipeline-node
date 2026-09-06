@@ -33,7 +33,12 @@
  */
 
 const { webcrypto } = require('crypto');
-const { FodId, IdType } = require('../index');
+const { FodId, IdType, Usage } = require('../index');
+// The payload byte layout is internal to the package, so a consumer
+// never reaches for it. This example builds a sample 51Did to work on,
+// which the cloud would otherwise issue, so it reads the layout from
+// inside the package.
+const layout = require('../internal/layout');
 
 const subtle = webcrypto.subtle;
 const VERSION = 2;
@@ -45,13 +50,17 @@ function uint32LE (v) {
 }
 
 function samplePayload () {
-  const p = new Uint8Array(FodId.PAYLOAD_LENGTH); // Probabilistic (flags 0x00)
-  p[FodId.LICENSE_ID_OFFSET] = 0x78;
-  p[FodId.LICENSE_ID_OFFSET + 1] = 0x56;
-  p[FodId.LICENSE_ID_OFFSET + 2] = 0x34;
-  p[FodId.LICENSE_ID_OFFSET + 3] = 0x12;
-  for (let i = 0; i < FodId.MATCH_KEY_LENGTH; i++) {
-    p[FodId.MATCH_KEY_OFFSET + i] = 0x20 + i;
+  const p = new Uint8Array(layout.PAYLOAD_LENGTH);
+  // Bits 6 and 7 are zero, so the type is Probabilistic. Bits 0 to 2 are
+  // the usage and they are cumulative, so 0b011 grants standard
+  // marketing and, with it, non-marketing use.
+  p[layout.FLAGS_OFFSET] = 0b0000_0011;
+  p[layout.LICENSE_ID_OFFSET] = 0x78;
+  p[layout.LICENSE_ID_OFFSET + 1] = 0x56;
+  p[layout.LICENSE_ID_OFFSET + 2] = 0x34;
+  p[layout.LICENSE_ID_OFFSET + 3] = 0x12;
+  for (let i = 0; i < layout.MATCH_KEY_LENGTH; i++) {
+    p[layout.MATCH_KEY_OFFSET + i] = 0x20 + i;
   }
   return p;
 }
@@ -94,7 +103,8 @@ async function run () {
   console.log('51Did parsed from base64:');
   console.log('  Domain    :', fodId.domain);
   console.log('  Type      :', IdType.name(fodId.type));
-  console.log('  Flags     : 0x' + fodId.flags.toString(16));
+  console.log('  Usage     :', Usage.name(fodId.usage));
+  console.log('  From cons.:', fodId.usageFromConsent);
   console.log('  LicenseId :', fodId.licenseId);
   console.log('  Match key :', Buffer.from(fodId.matchKey).toString('hex'));
   console.log('  Verifies  :', await fodId.verify(publicPem));
@@ -129,7 +139,7 @@ async function run () {
       ', status ' + result.status);
   }
   const shortPayload = await issue(
-    keyPair.privateKey, payload.slice(0, FodId.PAYLOAD_LENGTH - 1), DATE);
+    keyPair.privateKey, payload.slice(0, layout.PAYLOAD_LENGTH - 1), DATE);
   const short = FodId.tryParse(shortPayload);
   console.log('  a payload one byte short -> ok ' + short.ok +
     ', status ' + short.status);

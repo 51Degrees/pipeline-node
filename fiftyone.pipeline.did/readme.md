@@ -20,11 +20,22 @@ envelopes.**
 
 ## Payload layout
 
-| Offset | Length | Field      | Type                                            |
-|-------:|-------:|------------|-------------------------------------------------|
-|      0 |      1 | Flags      | uint8: bits 0-2 usage, bits 6-7 identifier type |
-|      1 |      4 | LicenseId  | uint32 (little-endian), see below               |
-|      5 |  16/32 | Match key  | SHA-256 (Probabilistic, HashedEmail) or GUID (Random) |
+The byte layout is specified once for every language in the 51Did
+specification, and that specification is the authority for it:
+
+- [Identifier layout](https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md)
+- [Package surface](https://github.com/51Degrees/specifications/blob/main/did-specification/package-surface.md)
+
+Your code never needs the offsets, because every field has a named accessor,
+so the offsets and the lengths are internal to this package. Reading the flags
+byte by hand is the mistake they are kept internal to prevent, because the
+usage bits are cumulative and a mask for one of them answers the wrong
+question. The summary here explains what the accessors report, and the
+specification governs wherever the two differ.
+
+The payload carries a one byte Flags field, a four byte little-endian
+LicenseId and then the match key. Bits 6 and 7 of the flags name the
+identifier type, which decides how long the match key is.
 
 | Bits 7-6 | `IdType`        | Match key length | Least payload accepted |
 |---------:|-----------------|-----------------:|-----------------------:|
@@ -46,6 +57,36 @@ lengths of a context section belong to the cloud, so the reader checks only
 the lower bound for the identifier type, holds no upper bound of its own, and
 leaves anything longer for the cloud to judge. A reader built before a longer
 context section existed therefore still reads the identifier.
+
+## The usage a 51Did was created for
+
+Every 51Did says what it was created for, and `fodId.usage` reports it as one
+of the `Usage` values. The usage decides where the identifier may go, so it is
+read before the identifier is passed anywhere.
+
+| `Usage` | The cloud's `id.usage` | Meaning |
+| --- | --- | --- |
+| `NONE` | none | No usage bit is set. The cloud never issues such an identifier, so treat it as one that may not be passed on |
+| `NON_MARKETING` | `non-marketing` | Created for use that is not marketing. Must never be passed to a demand source |
+| `STANDARD` | `standard` | Created for standard marketing, being targeting unrelated to browsing history |
+| `PERSONALIZED` | `personalized` | Created for personalized marketing, being targeting related to browsing history |
+
+The three usages are cumulative in the flags byte rather than exclusive.
+Non-marketing sets one bit, standard sets two and personalized sets three, so
+every marketing identifier also carries the non-marketing bit. Code masking
+the byte for that bit alone would read every marketing identifier as
+non-marketing, which is the wrong way round for a rule that turns on it.
+`fodId.usage` answers with the highest usage granted, so that mistake cannot
+be made, and it is the only supported way to read the usage.
+
+`fodId.usageFromConsent` says whether the usage was worked out from an IAB
+consent string the caller sent rather than stated by the caller directly. Both
+are legitimate ways to arrive at a usage, and it says nothing about which
+usage it is.
+
+`Usage.name(usage)` gives the cross language name, for example
+`"NonMarketing"`, and `Usage.idUsage(usage)` gives the cloud's own `id.usage`
+value, for example `"non-marketing"`, or `null` for `NONE`.
 
 ## Reading a 51Did
 
@@ -134,8 +175,25 @@ the OWID library through this package changes as follows.
 | `FodId.fromOwid(new owid(s))` | `FodId.fromBase64(s)`, or `FodId.tryParse(s)` for a result |
 | `try { FodId.fromBase64(s) } catch (e) { /* e was a string */ }` | `const r = FodId.tryParse(s); if (!r.ok) { /* r.status */ }` |
 | `catch (e)` on `fromBase64` reading `e.message` | `catch (e)` reading `e.status`, one of `FodId.ParseStatus` |
-| `fodId.date` read as a signed number | `fodId.date` is now unsigned, the same value as `fodId.dateMinutes` |
+| `fodId.date` read as a signed number | `fodId.date` is now unsigned |
 | `fodId.verify(pem)` resolving `false` for a key that could not be imported | `verify` rejects when the question could not be answered, and `checkSignature(pem)` reports `INVALID_KEY` |
+
+### Migrating from the removed raw surface
+
+The raw byte and the offsets were the way to read by hand a field that already
+has a name, so they have gone. `fodId.flags`, `fodId.dateMinutes`, the
+deprecated `fodId.hash`, and the layout constants `FLAGS_OFFSET`,
+`LICENSE_ID_OFFSET`, `LICENSE_ID_LENGTH`, `MATCH_KEY_OFFSET`,
+`MATCH_KEY_LENGTH`, `HEADER_LENGTH`, `GUID_LENGTH`, `RANDOM_PAYLOAD_LENGTH`
+and `PAYLOAD_LENGTH` are no longer part of the package.
+
+| Before | After |
+| --- | --- |
+| `fodId.flags` masked for a usage bit | `fodId.usage`, and `fodId.usageFromConsent` for bit 3 |
+| `fodId.flags` masked for the type bits | `fodId.type` |
+| `fodId.hash` | `fodId.matchKey`, the same bytes under the name the Model Terms for Marketing use |
+| `fodId.dateMinutes` | `fodId.date`, which reports the same unsigned value |
+| `FodId.PAYLOAD_LENGTH` and the other layout constants | Nothing. Every field has a named accessor, and the layout is in the specification linked above |
 
 ## OWID dependency
 
@@ -178,32 +236,28 @@ npm test
 ## Usage
 
 ```js
-const { FodId, IdType } = require('fiftyone.pipeline.did');
+const { FodId, IdType, Usage } = require('fiftyone.pipeline.did');
 
 // Either base64 alphabet is accepted, the standard one the cloud issues and
 // the URL-safe one a page puts in a link, with or without padding.
 const fodId = FodId.fromBase64(base64FromCloudService);
 
-const flags = fodId.flags;
+const usage = fodId.usage;        // Usage.NON_MARKETING / STANDARD / PERSONALIZED
+const fromConsent = fodId.usageFromConsent;
 const type = fodId.type;          // IdType.PROBABILISTIC / RANDOM / HASHED_EMAIL
 const licenseId = fodId.licenseId;
 const matchKey = fodId.matchKey;  // Uint8Array: SHA-256 or GUID bytes, see type
 
 const domain = fodId.domain;
-const minutes = fodId.dateMinutes; // minutes since 2020-01-01T00:00:00Z
+const minutes = fodId.date;       // minutes since 2020-01-01T00:00:00Z
 const verified = await fodId.verify(publicKeyPem);   // async (Web Crypto)
 const base64 = fodId.asBase64();      // standard alphabet with padding
 const inLink = fodId.asBase64Url();   // URL-safe alphabet, no padding
 ```
 
-`fodId.hash` remains as a deprecated alias of `matchKey` returning the same
-bytes, so existing callers keep working, and will be removed in a future
-release.
-
-`dateMinutes` is the envelope's own date as the unsigned 32-bit count of
-minutes since 2020-01-01T00:00:00Z, the value the OWID `public-key?date=`
-parameter takes, for callers comparing creation times. `date` now reports
-the same unsigned value.
+`date` is the envelope's own date as the unsigned 32-bit count of minutes
+since 2020-01-01T00:00:00Z, exactly as the wire carries it, and it is the
+integer to compare when asking which of two identifiers was issued first.
 
 Where the value may not be a 51Did at all, read it without throwing.
 
