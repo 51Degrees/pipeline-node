@@ -22,6 +22,7 @@
 
 const owid = require('owid');
 const IdType = require('./idType');
+const Usage = require('./usage');
 const FodIdParseError = require('./fodIdParseError');
 
 /**
@@ -311,6 +312,26 @@ class FodId {
   /** @returns {number} the IdType carried in bits 6-7 of the flags. */
   get type () {
     return IdType.fromFlags(this._flags);
+  }
+
+  /**
+   * The Usage carried in bits 0-2 of the flags, as the highest usage
+   * granted. See Usage for why it is read that way.
+   * @returns {number} a Usage value
+   */
+  get usage () {
+    return Usage.fromFlags(this._flags);
+  }
+
+  /**
+   * Whether the usage was derived from an IAB consent string the caller
+   * sent, rather than stated by the caller directly. Bit 3 of the flags.
+   * Both are legitimate ways to arrive at a usage, and this says nothing
+   * about which usage it is.
+   * @returns {boolean}
+   */
+  get usageFromConsent () {
+    return (this._flags & 0b1000) !== 0;
   }
 
   /**

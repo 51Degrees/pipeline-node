@@ -21,7 +21,7 @@
  * ********************************************************************* */
 
 const owid = require('owid');
-const { FodId, FodIdParseError, IdType } = require('../index');
+const { FodId, FodIdParseError, IdType, Usage } = require('../index');
 const {
   DOMAIN,
   DATE,
@@ -252,6 +252,32 @@ describe('FodId', () => {
     p[FodId.FLAGS_OFFSET] = flags;
     return FodId.fromBase64(envelopeBase64(p)).type;
   }
+
+  // The usage is the highest granted, because the bits are cumulative. A
+  // mask for the non-marketing bit alone would say yes for every marketing
+  // identifier, which is the wrong answer for a data protection decision.
+  test.each([
+    [0b000, Usage.NONE, null],
+    [0b001, Usage.NON_MARKETING, 'non-marketing'],
+    [0b011, Usage.STANDARD, 'standard'],
+    [0b111, Usage.PERSONALIZED, 'personalized']
+  ])('usage bits %s read as the highest granted', (bits, expected, idUsage) => {
+    const p = canonicalRandomPayload();
+    p[FodId.FLAGS_OFFSET] = (1 << 6) | bits;
+    const fod = FodId.fromBase64(envelopeBase64(p));
+    expect(fod.usage).toBe(expected);
+    expect(Usage.idUsage(fod.usage)).toBe(idUsage);
+    expect(fod.type).toBe(IdType.RANDOM);
+    expect(fod.usageFromConsent).toBe(false);
+  });
+
+  test('usage from consent is bit three', () => {
+    const p = canonicalRandomPayload();
+    p[FodId.FLAGS_OFFSET] = (1 << 6) | 0b1011;
+    const fod = FodId.fromBase64(envelopeBase64(p));
+    expect(fod.usageFromConsent).toBe(true);
+    expect(fod.usage).toBe(Usage.STANDARD);
+  });
 
   test('type is Random when bits are 01', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalRandomPayload()));
