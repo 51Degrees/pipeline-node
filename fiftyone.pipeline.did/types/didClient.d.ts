@@ -345,7 +345,18 @@ export const ContextResult: Readonly<{
     NO_CONTEXT: "nocontext";
     /** The service holds no secret covering the identifier's date. */
     NOT_CHECKABLE: "notcheckable";
+    /**
+     * The service that checked the identifier could not complete the check,
+     * and the reason is that service rather than the identifier. It either
+     * compared nothing, or compared some factors and reports at least one as
+     * `misconfigured` in `factors`. Nothing a caller sends can produce it.
+     */
     MISCONFIGURED: "misconfigured";
+    /**
+     * The creation date is one the scheme could not have produced, being in
+     * the future or before the creator context scheme began, so the
+     * identifier is fabricated rather than the service being wrong.
+     */
     INVALID_DATE: "invaliddate";
     /** The sealed result was redeemed outside the freshness window. */
     EXPIRED: "expired";
@@ -371,13 +382,17 @@ export const SignatureResult: Readonly<{
     UNKNOWN: "unknown";
 }>;
 /**
- * The outcome of one factor in a mismatch or a partly misconfigured
- * result. The cloud reports `null` for a
+ * The outcome of one factor in a mismatch. The cloud reports `null` for a
  * factor that was not compared, which is passed through unchanged.
  */
 export const FactorResult: Readonly<{
     VERIFIED: "verified";
     MISMATCH: "mismatch";
+    /**
+     * The service that checked the identifier is not configured to determine
+     * this factor, so it could not have checked it for any request. This is
+     * NOT a mismatch and must not be read as one.
+     */
     MISCONFIGURED: "misconfigured";
 }>;
 /**

@@ -26,7 +26,7 @@
 // the signature, and signed with real ECDSA P-256 keys where a test needs
 // a signature that verifies.
 
-const FodId = require('../fodId');
+const layout = require('../internal/layout');
 
 const VERSION = 2;
 const SIGNED_VERSION = 3;
@@ -37,33 +37,33 @@ const CANONICAL_LICENSE_ID = 0x12345678;
 const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 
 function canonicalMatchKey () {
-  const h = new Uint8Array(FodId.MATCH_KEY_LENGTH);
+  const h = new Uint8Array(layout.MATCH_KEY_LENGTH);
   for (let i = 0; i < h.length; i++) { h[i] = 0x20 + i; }
   return h;
 }
 
 function writeLicenseId (payload) {
   // Little-endian 0x12345678 -> 78 56 34 12.
-  payload[FodId.LICENSE_ID_OFFSET] = 0x78;
-  payload[FodId.LICENSE_ID_OFFSET + 1] = 0x56;
-  payload[FodId.LICENSE_ID_OFFSET + 2] = 0x34;
-  payload[FodId.LICENSE_ID_OFFSET + 3] = 0x12;
+  payload[layout.LICENSE_ID_OFFSET] = 0x78;
+  payload[layout.LICENSE_ID_OFFSET + 1] = 0x56;
+  payload[layout.LICENSE_ID_OFFSET + 2] = 0x34;
+  payload[layout.LICENSE_ID_OFFSET + 3] = 0x12;
 }
 
 function canonicalPayload () {
-  const p = new Uint8Array(FodId.PAYLOAD_LENGTH);
-  p[FodId.FLAGS_OFFSET] = CANONICAL_FLAGS;
+  const p = new Uint8Array(layout.PAYLOAD_LENGTH);
+  p[layout.FLAGS_OFFSET] = CANONICAL_FLAGS;
   writeLicenseId(p);
-  p.set(canonicalMatchKey(), FodId.MATCH_KEY_OFFSET);
+  p.set(canonicalMatchKey(), layout.MATCH_KEY_OFFSET);
   return p;
 }
 
 function canonicalRandomPayload () {
-  const p = new Uint8Array(FodId.RANDOM_PAYLOAD_LENGTH);
-  p[FodId.FLAGS_OFFSET] = (1 << 6) | 0b001; // Random tag + usage bits
+  const p = new Uint8Array(layout.RANDOM_PAYLOAD_LENGTH);
+  p[layout.FLAGS_OFFSET] = (1 << 6) | 0b001; // Random tag + usage bits
   writeLicenseId(p);
-  for (let i = 0; i < FodId.GUID_LENGTH; i++) {
-    p[FodId.MATCH_KEY_OFFSET + i] = 0x40 + i;
+  for (let i = 0; i < layout.GUID_LENGTH; i++) {
+    p[layout.MATCH_KEY_OFFSET + i] = 0x40 + i;
   }
   return p;
 }

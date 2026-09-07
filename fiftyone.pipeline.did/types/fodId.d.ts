@@ -33,41 +33,17 @@ export = FodId;
  * A FodId composes the OWID the OWID library read (holds it and delegates
  * the envelope fields to it). That OWID is frozen and hands out its byte
  * arrays as copies, so nothing a caller holds can change the identifier.
+ *
+ * Every field has a named accessor here, so nothing needs the payload
+ * bytes or their offsets. The byte layout itself is specified once for all
+ * languages, and that specification is the authority rather than this
+ * comment:
+ * https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md
+ *
+ * What each 51Did package offers on top of that layout is specified at:
+ * https://github.com/51Degrees/specifications/blob/main/did-specification/package-surface.md
  */
 declare class FodId {
-    static FLAGS_OFFSET: number;
-    static LICENSE_ID_OFFSET: number;
-    static LICENSE_ID_LENGTH: number;
-    /** Byte offset of the match key field within the payload. */
-    static MATCH_KEY_OFFSET: number;
-    /**
-     * Byte length of the match key field for Probabilistic and HashedEmail
-     * identifiers, being a SHA-256.
-     */
-    static MATCH_KEY_LENGTH: number;
-    /**
-     * Deprecated alias for {@link FodId.MATCH_KEY_OFFSET}. The stable,
-     * comparable part of a 51Did is now called the match key, mirroring the
-     * Model Terms for Marketing vocabulary. This alias will be removed in a
-     * future release.
-     * @deprecated Renamed to MATCH_KEY_OFFSET. This alias will be removed in
-     * a future release.
-     */
-    static HASH_OFFSET: number;
-    /**
-     * Deprecated alias for {@link FodId.MATCH_KEY_LENGTH}. The stable,
-     * comparable part of a 51Did is now called the match key, mirroring the
-     * Model Terms for Marketing vocabulary. This alias will be removed in a
-     * future release.
-     * @deprecated Renamed to MATCH_KEY_LENGTH. This alias will be removed in
-     * a future release.
-     */
-    static HASH_LENGTH: number;
-    static HEADER_LENGTH: number;
-    /** Byte length of the GUID match key carried by Random identifiers. */
-    static GUID_LENGTH: number;
-    static RANDOM_PAYLOAD_LENGTH: number;
-    static PAYLOAD_LENGTH: number;
     /**
      * Why a read succeeded or failed, being the OWID library's statuses plus
      * `PAYLOAD_TOO_SHORT` and `INVALID_TYPE_PAYLOAD_LENGTH`. Frozen.
@@ -196,10 +172,22 @@ declare class FodId {
     _licenseId: number;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     _matchKey: Uint8Array;
-    /** @returns {number} the 1-byte usage flags bit-mask (0-255). */
-    get flags(): number;
     /** @returns {number} the IdType carried in bits 6-7 of the flags. */
     get type(): number;
+    /**
+     * The Usage carried in bits 0-2 of the flags, as the highest usage
+     * granted. See Usage for why it is read that way.
+     * @returns {number} a Usage value
+     */
+    get usage(): number;
+    /**
+     * Whether the usage was derived from an IAB consent string the caller
+     * sent, rather than stated by the caller directly. Bit 3 of the flags.
+     * Both are legitimate ways to arrive at a usage, and this says nothing
+     * about which usage it is.
+     * @returns {boolean}
+     */
+    get usageFromConsent(): boolean;
     /**
      * The 4-byte little-endian field at offset 1 of the payload, as an
      * unsigned integer (0-4294967295).
@@ -222,36 +210,18 @@ declare class FodId {
      * @returns {Uint8Array} a defensive copy of the match key bytes
      */
     get matchKey(): Uint8Array;
-    /**
-     * Deprecated alias for {@link FodId#matchKey}. The stable, comparable
-     * part of a 51Did is now called the match key, mirroring the Model Terms
-     * for Marketing vocabulary. This alias will be removed in a future
-     * release.
-     * @deprecated Renamed to matchKey. This alias will be removed in a future
-     * release.
-     * @returns {Uint8Array} the same bytes as {@link FodId#matchKey}
-     */
-    get hash(): Uint8Array;
     /** @returns {number} the OWID version. */
     get version(): number;
     /** @returns {string} the domain of the OWID creator. */
     get domain(): string;
     /**
-     * @returns {number} the OWID date as minutes since 2020-01-01 UTC, as an
-     * unsigned 32-bit number, the same value as {@link FodId#dateMinutes}.
-     */
-    get date(): number;
-    /**
-     * The envelope's own date as the unsigned 32-bit count of minutes since
-     * 2020-01-01T00:00:00Z, exactly as the wire carries it. This is the value
-     * the OWID `public-key?date=` parameter takes, and the integer to use when
-     * comparing creation times. The OWID library now reads the field unsigned
-     * too, so {@link FodId#date} agrees with this getter. The getter is kept
-     * because callers were told to use it, and it still forces the unsigned
-     * reading should the field ever arrive signed.
+     * The envelope's own date, being the count of minutes since
+     * 2020-01-01T00:00:00Z exactly as the wire carries it, read as an
+     * unsigned 32-bit number. This is the integer to compare when asking
+     * which of two identifiers was issued first.
      * @returns {number} minutes since 2020-01-01T00:00:00Z
      */
-    get dateMinutes(): number;
+    get date(): number;
     /** @returns {Uint8Array} a fresh copy of the OWID payload bytes. */
     get payload(): Uint8Array;
     /** @returns {Uint8Array} a fresh copy of the 64-byte OWID signature. */

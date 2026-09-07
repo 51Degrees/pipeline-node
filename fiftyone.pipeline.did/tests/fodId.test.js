@@ -21,7 +21,7 @@
  * ********************************************************************* */
 
 const owid = require('owid');
-const { FodId, FodIdParseError, IdType } = require('../index');
+const { FodId, FodIdParseError, IdType, Usage } = require('../index');
 const {
   DOMAIN,
   DATE,
@@ -36,19 +36,33 @@ const {
   signedVerifiable,
   randomPublicPem
 } = require('./envelope');
+const layout = require('../internal/layout');
 
 const { ParseStatus, SignatureStatus } = FodId;
 
 describe('FodId', () => {
   // ----- Current .NET coverage -----
 
-  test('constants are internally consistent', () => {
-    expect(FodId.MATCH_KEY_OFFSET + FodId.MATCH_KEY_LENGTH)
-      .toBe(FodId.PAYLOAD_LENGTH);
-    expect(FodId.LICENSE_ID_OFFSET + FodId.LICENSE_ID_LENGTH)
-      .toBe(FodId.MATCH_KEY_OFFSET);
-    expect(FodId.MATCH_KEY_OFFSET + FodId.GUID_LENGTH)
-      .toBe(FodId.RANDOM_PAYLOAD_LENGTH);
+  test('the internal layout constants are consistent', () => {
+    expect(layout.MATCH_KEY_OFFSET + layout.MATCH_KEY_LENGTH)
+      .toBe(layout.PAYLOAD_LENGTH);
+    expect(layout.LICENSE_ID_OFFSET + layout.LICENSE_ID_LENGTH)
+      .toBe(layout.MATCH_KEY_OFFSET);
+    expect(layout.FLAGS_OFFSET + 1).toBe(layout.LICENSE_ID_OFFSET);
+    expect(layout.MATCH_KEY_OFFSET).toBe(layout.HEADER_LENGTH);
+    expect(layout.MATCH_KEY_OFFSET + layout.GUID_LENGTH)
+      .toBe(layout.RANDOM_PAYLOAD_LENGTH);
+  });
+
+  test('the layout is not part of the public surface', () => {
+    // The offsets are the way back to reading a named field by hand, so
+    // nothing about them is reachable through the package entry point.
+    const published = require('../index');
+    for (const name of Object.keys(layout)) {
+      expect(FodId[name]).toBeUndefined();
+      expect(published[name]).toBeUndefined();
+    }
+    expect(published.layout).toBeUndefined();
   });
 
   test('exposes OWID-level fields', () => {
@@ -60,7 +74,7 @@ describe('FodId', () => {
 
   test('fromBase64 unpacks all three fields', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(DOMAIN);
@@ -68,7 +82,7 @@ describe('FodId', () => {
 
   test('fromByteArray unpacks all three fields', () => {
     const fod = FodId.fromByteArray(envelopeBytes(canonicalPayload()));
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(DOMAIN);
@@ -78,7 +92,7 @@ describe('FodId', () => {
     // An OWID reaches a caller only from a successful owid.parse.
     const o = owid.parse(envelopeBase64(canonicalPayload())).owid;
     const fod = FodId.fromOwid(o);
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.domain).toBe(o.domain);
@@ -113,40 +127,29 @@ describe('FodId', () => {
     expect(FodId.fromBase64(envelopeBase64(p)).licenseId).toBe(0x80000000);
   });
 
-  test('flags zero value exposed', () => {
+  test('a flags byte of zero is read unchanged', () => {
     const p = canonicalPayload();
-    p[FodId.FLAGS_OFFSET] = 0x00;
-    expect(FodId.fromBase64(envelopeBase64(p)).flags).toBe(0);
+    p[layout.FLAGS_OFFSET] = 0x00;
+    expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(0);
   });
 
-  test('flags all bits set exposed', () => {
+  test('a flags byte with every bit set is read unchanged', () => {
     const p = canonicalPayload();
-    p[FodId.FLAGS_OFFSET] = 0xFF;
-    expect(FodId.fromBase64(envelopeBase64(p)).flags).toBe(255);
+    p[layout.FLAGS_OFFSET] = 0xFF;
+    expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(255);
   });
 
   test('matchKey is a defensive copy', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     const k = fod.matchKey;
     k[0] = 0x00;
-    k[FodId.MATCH_KEY_LENGTH - 1] = 0x00;
+    k[layout.MATCH_KEY_LENGTH - 1] = 0x00;
     expect(fod.matchKey).toEqual(canonicalMatchKey());
-    expect(fod.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
-  });
-
-  test('the deprecated hash getter returns the match key', () => {
-    const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
-    expect(fod.hash).toEqual(fod.matchKey);
-    expect(fod.hash).toEqual(canonicalMatchKey());
-    // The alias hands out a copy too, so a caller cannot reach the stored
-    // bytes through the old name.
-    const h = fod.hash;
-    h[0] = 0x00;
-    expect(fod.matchKey).toEqual(canonicalMatchKey());
+    expect(fod.payload[layout.MATCH_KEY_OFFSET]).toBe(0x20);
   });
 
   test('payload one byte short throws', () => {
-    expect(() => FodId.fromBase64(envelopeBase64(new Uint8Array(FodId.PAYLOAD_LENGTH - 1))))
+    expect(() => FodId.fromBase64(envelopeBase64(new Uint8Array(layout.PAYLOAD_LENGTH - 1))))
       .toThrow(RangeError);
   });
 
@@ -171,12 +174,12 @@ describe('FodId', () => {
   test('payload larger than spec uses first 37 bytes', () => {
     const p = new Uint8Array(64);
     p.set(canonicalPayload());
-    p.fill(0xCC, FodId.PAYLOAD_LENGTH);
+    p.fill(0xCC, layout.PAYLOAD_LENGTH);
     const fod = FodId.fromBase64(envelopeBase64(p));
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
-    expect(fod.matchKey.length).toBe(FodId.MATCH_KEY_LENGTH);
+    expect(fod.matchKey.length).toBe(layout.MATCH_KEY_LENGTH);
   });
 
   test('a long context section and a long creator domain both parse', () => {
@@ -184,9 +187,9 @@ describe('FodId', () => {
     // container may sign with a longer one, and a context section of a
     // version this reader does not implement may be longer still. Both
     // must parse and leave the judgement to the cloud.
-    const p = new Uint8Array(FodId.PAYLOAD_LENGTH + 400);
+    const p = new Uint8Array(layout.PAYLOAD_LENGTH + 400);
     p.set(canonicalPayload());
-    p.fill(0xCC, FodId.PAYLOAD_LENGTH);
+    p.fill(0xCC, layout.PAYLOAD_LENGTH);
     const bytes = envelopeBytes(p, {
       domain: 'a-self-hosted-container.example.internal.51degrees.com'
     });
@@ -199,7 +202,7 @@ describe('FodId', () => {
       FodId.tryParse(encoded).value,
       FodId.tryFromByteArray(bytes).value
     ]) {
-      expect(fod.flags).toBe(CANONICAL_FLAGS);
+      expect(fod._flags).toBe(CANONICAL_FLAGS);
       expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
       expect(fod.matchKey).toEqual(canonicalMatchKey());
       expect(fod.payload).toHaveLength(p.length);
@@ -217,7 +220,7 @@ describe('FodId', () => {
       expect(fod.asBase64()).toBe(expected.asBase64());
       expect(fod.matchKey).toEqual(expected.matchKey);
       expect(fod.licenseId).toBe(expected.licenseId);
-      expect(fod.flags).toBe(expected.flags);
+      expect(fod._flags).toBe(expected._flags);
     }
   });
 
@@ -233,7 +236,7 @@ describe('FodId', () => {
   test('base64 round-trip preserves all fields', () => {
     const fod1 = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     const fod2 = FodId.fromBase64(fod1.asBase64());
-    expect(fod2.flags).toBe(fod1.flags);
+    expect(fod2._flags).toBe(fod1._flags);
     expect(fod2.licenseId).toBe(fod1.licenseId);
     expect(fod2.matchKey).toEqual(fod1.matchKey);
     expect(fod2.domain).toBe(fod1.domain);
@@ -249,9 +252,35 @@ describe('FodId', () => {
 
   function typeFor (flags) {
     const p = canonicalPayload();
-    p[FodId.FLAGS_OFFSET] = flags;
+    p[layout.FLAGS_OFFSET] = flags;
     return FodId.fromBase64(envelopeBase64(p)).type;
   }
+
+  // The usage is the highest granted, because the bits are cumulative. A
+  // mask for the non-marketing bit alone would say yes for every marketing
+  // identifier, which is the wrong answer for a data protection decision.
+  test.each([
+    [0b000, Usage.NONE, null],
+    [0b001, Usage.NON_MARKETING, 'non-marketing'],
+    [0b011, Usage.STANDARD, 'standard'],
+    [0b111, Usage.PERSONALIZED, 'personalized']
+  ])('usage bits %s read as the highest granted', (bits, expected, idUsage) => {
+    const p = canonicalRandomPayload();
+    p[layout.FLAGS_OFFSET] = (1 << 6) | bits;
+    const fod = FodId.fromBase64(envelopeBase64(p));
+    expect(fod.usage).toBe(expected);
+    expect(Usage.idUsage(fod.usage)).toBe(idUsage);
+    expect(fod.type).toBe(IdType.RANDOM);
+    expect(fod.usageFromConsent).toBe(false);
+  });
+
+  test('usage from consent is bit three', () => {
+    const p = canonicalRandomPayload();
+    p[layout.FLAGS_OFFSET] = (1 << 6) | 0b1011;
+    const fod = FodId.fromBase64(envelopeBase64(p));
+    expect(fod.usageFromConsent).toBe(true);
+    expect(fod.usage).toBe(Usage.STANDARD);
+  });
 
   test('type is Random when bits are 01', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalRandomPayload()));
@@ -261,34 +290,34 @@ describe('FodId', () => {
   test('Random 21-byte payload parses', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalRandomPayload()));
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-    expect(fod.matchKey.length).toBe(FodId.GUID_LENGTH);
-    const guid = new Uint8Array(FodId.GUID_LENGTH);
+    expect(fod.matchKey.length).toBe(layout.GUID_LENGTH);
+    const guid = new Uint8Array(layout.GUID_LENGTH);
     for (let i = 0; i < guid.length; i++) { guid[i] = 0x40 + i; }
     expect(fod.matchKey).toEqual(guid);
   });
 
   test('Random payload one byte short throws', () => {
-    const p = canonicalRandomPayload().slice(0, FodId.RANDOM_PAYLOAD_LENGTH - 1);
+    const p = canonicalRandomPayload().slice(0, layout.RANDOM_PAYLOAD_LENGTH - 1);
     expect(() => FodId.fromBase64(envelopeBase64(p))).toThrow(RangeError);
   });
 
   test('Random payload larger than spec uses first 16 value bytes', () => {
-    const p = new Uint8Array(FodId.PAYLOAD_LENGTH);
+    const p = new Uint8Array(layout.PAYLOAD_LENGTH);
     p.set(canonicalRandomPayload());
-    p.fill(0xCC, FodId.RANDOM_PAYLOAD_LENGTH);
+    p.fill(0xCC, layout.RANDOM_PAYLOAD_LENGTH);
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RANDOM);
-    expect(fod.matchKey.length).toBe(FodId.GUID_LENGTH);
+    expect(fod.matchKey.length).toBe(layout.GUID_LENGTH);
   });
 
   test('HashedEmail payload one byte short throws', () => {
-    const p = canonicalPayload().slice(0, FodId.PAYLOAD_LENGTH - 1);
+    const p = canonicalPayload().slice(0, layout.PAYLOAD_LENGTH - 1);
     expect(() => FodId.fromBase64(envelopeBase64(p))).toThrow(RangeError);
   });
 
   test('Reserved header-only payload parses', () => {
-    const p = new Uint8Array(FodId.MATCH_KEY_OFFSET);
-    p[FodId.FLAGS_OFFSET] = 0b1100_0000;
+    const p = new Uint8Array(layout.MATCH_KEY_OFFSET);
+    p[layout.FLAGS_OFFSET] = 0b1100_0000;
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RESERVED);
     expect(fod.matchKey.length).toBe(0);
@@ -314,7 +343,7 @@ describe('FodId', () => {
     // An envelope with a bogus signature still constructs and exposes all
     // three fields - construction must not verify.
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
   });
@@ -326,11 +355,11 @@ describe('FodId', () => {
     const o = owid.parse(envelopeBase64(canonicalPayload())).owid;
     const fod = FodId.fromOwid(o);
     expect(Object.isFrozen(o)).toBe(true);
-    o.payload[FodId.MATCH_KEY_OFFSET] = 0x00; // writes into a copy
-    expect(o.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
+    o.payload[layout.MATCH_KEY_OFFSET] = 0x00; // writes into a copy
+    expect(o.payload[layout.MATCH_KEY_OFFSET]).toBe(0x20);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
-    expect(fod.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
+    expect(fod.payload[layout.MATCH_KEY_OFFSET]).toBe(0x20);
   });
 
   test('constructor is decoupled from the source owid', () => {
@@ -339,10 +368,10 @@ describe('FodId', () => {
     const o = owid.parse(envelopeBase64(canonicalPayload())).owid;
     const fod = new FodId(o);
     expect(fod._owid).not.toBe(o);
-    fod.payload[FodId.MATCH_KEY_OFFSET] = 0x00; // writes into a copy
+    fod.payload[layout.MATCH_KEY_OFFSET] = 0x00; // writes into a copy
     expect(fod.matchKey).toEqual(canonicalMatchKey());
-    expect(fod.flags).toBe(CANONICAL_FLAGS);
-    expect(fod.payload[FodId.MATCH_KEY_OFFSET]).toBe(0x20);
+    expect(fod._flags).toBe(CANONICAL_FLAGS);
+    expect(fod.payload[layout.MATCH_KEY_OFFSET]).toBe(0x20);
   });
 
   test('verify with the wrong key returns false', async () => {
@@ -355,7 +384,7 @@ describe('FodId', () => {
   test('round-trip through the bytes constructor preserves all fields', () => {
     const fod1 = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     const fod2 = FodId.fromByteArray(fod1.asByteArray());
-    expect(fod2.flags).toBe(fod1.flags);
+    expect(fod2._flags).toBe(fod1._flags);
     expect(fod2.licenseId).toBe(fod1.licenseId);
     expect(fod2.matchKey).toEqual(fod1.matchKey);
     expect(fod2.domain).toBe(fod1.domain);
@@ -368,9 +397,9 @@ describe('FodId', () => {
   function alphabetPayload () {
     const p = canonicalPayload();
     // 0xFB 0xFF 0xBF encodes to "+/+/" in standard base64.
-    p[FodId.MATCH_KEY_OFFSET] = 0xFB;
-    p[FodId.MATCH_KEY_OFFSET + 1] = 0xFF;
-    p[FodId.MATCH_KEY_OFFSET + 2] = 0xBF;
+    p[layout.MATCH_KEY_OFFSET] = 0xFB;
+    p[layout.MATCH_KEY_OFFSET + 1] = 0xFF;
+    p[layout.MATCH_KEY_OFFSET + 2] = 0xBF;
     return p;
   }
 
@@ -386,7 +415,7 @@ describe('FodId', () => {
     const b = FodId.fromBase64(urlSafePadded);
     const c = FodId.fromBase64(urlSafe);
     for (const fod of [b, c]) {
-      expect(fod.flags).toBe(a.flags);
+      expect(fod._flags).toBe(a._flags);
       expect(fod.licenseId).toBe(a.licenseId);
       expect(fod.matchKey).toEqual(a.matchKey);
       expect(fod.date).toBe(a.date);
@@ -419,21 +448,17 @@ describe('FodId', () => {
 
   // ----- Date -----
 
-  test('dateMinutes equals the envelope date field', () => {
+  test('date equals the envelope date field', () => {
     const fod = FodId.fromBase64(
       envelopeBase64(canonicalPayload(), { date: DATE }));
-    expect(fod.dateMinutes).toBe(DATE);
-    expect(fod.dateMinutes).toBe(fod.date);
+    expect(fod.date).toBe(DATE);
   });
 
-  test('dateMinutes is unsigned', () => {
-    // A date with the high bit set reads as the unsigned 32-bit value here
-    // and, since the hardening, through the OWID library as well, so the
-    // two getters agree. Before the hardening the OWID library read the
-    // field signed and only dateMinutes forced the unsigned reading.
+  test('date is unsigned', () => {
+    // A date with the high bit set reads as the unsigned 32-bit value, so a
+    // 51Did issued after February 2098 does not come back negative.
     const fod = FodId.fromBase64(
       envelopeBase64(canonicalPayload(), { date: 0xF0000001 }));
-    expect(fod.dateMinutes).toBe(0xF0000001);
     expect(fod.date).toBe(0xF0000001);
   });
 });
@@ -538,15 +563,15 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     // A context section of a version this reader does not implement may be
     // any length. The reader takes the value it knows and leaves the rest.
     for (const extra of [1, 40, 400, 4000]) {
-      const p = new Uint8Array(FodId.PAYLOAD_LENGTH + extra);
+      const p = new Uint8Array(layout.PAYLOAD_LENGTH + extra);
       p.set(canonicalPayload());
-      p.fill(0xCC, FodId.PAYLOAD_LENGTH);
+      p.fill(0xCC, layout.PAYLOAD_LENGTH);
       const bytes = envelopeBytes(p);
       const fromBase64 = expectParsed(
         FodId.tryParse(Buffer.from(bytes).toString('base64')));
       const fromBytes = expectParsed(FodId.tryFromByteArray(bytes));
       for (const fod of [fromBase64, fromBytes]) {
-        expect(fod.payload).toHaveLength(FodId.PAYLOAD_LENGTH + extra);
+        expect(fod.payload).toHaveLength(layout.PAYLOAD_LENGTH + extra);
         expect(fod.matchKey).toEqual(canonicalMatchKey());
         expect(fod.type).toBe(IdType.HASHED_EMAIL);
       }
@@ -554,17 +579,17 @@ describe('FodId.tryParse and tryFromByteArray', () => {
   });
 
   test('a longer Random payload is not rejected for being longer than the known shape', () => {
-    const p = new Uint8Array(FodId.RANDOM_PAYLOAD_LENGTH + 300);
+    const p = new Uint8Array(layout.RANDOM_PAYLOAD_LENGTH + 300);
     p.set(canonicalRandomPayload());
-    p.fill(0x5A, FodId.RANDOM_PAYLOAD_LENGTH);
+    p.fill(0x5A, layout.RANDOM_PAYLOAD_LENGTH);
     const fod = expectParsed(FodId.tryParse(envelopeBase64(p)));
     expect(fod.type).toBe(IdType.RANDOM);
-    expect(fod.matchKey).toHaveLength(FodId.GUID_LENGTH);
+    expect(fod.matchKey).toHaveLength(layout.GUID_LENGTH);
     expect(fod.payload).toHaveLength(p.length);
   });
 
   test('a too short Random payload reports InvalidTypePayloadLength', () => {
-    for (let length = FodId.HEADER_LENGTH; length < FodId.RANDOM_PAYLOAD_LENGTH; length++) {
+    for (let length = layout.HEADER_LENGTH; length < layout.RANDOM_PAYLOAD_LENGTH; length++) {
       const p = canonicalRandomPayload().slice(0, length);
       expectFailed(
         readWithoutCrypto(() => FodId.tryParse(envelopeBase64(p))),
@@ -577,9 +602,9 @@ describe('FodId.tryParse and tryFromByteArray', () => {
 
   test('a too short Probabilistic or HashedEmail payload reports InvalidTypePayloadLength', () => {
     for (const flags of [0b0000_0101, 0b1000_0101]) {
-      for (const length of [FodId.HEADER_LENGTH, FodId.RANDOM_PAYLOAD_LENGTH, FodId.PAYLOAD_LENGTH - 1]) {
+      for (const length of [layout.HEADER_LENGTH, layout.RANDOM_PAYLOAD_LENGTH, layout.PAYLOAD_LENGTH - 1]) {
         const p = canonicalPayload().slice(0, length);
-        p[FodId.FLAGS_OFFSET] = flags;
+        p[layout.FLAGS_OFFSET] = flags;
         expectFailed(
           readWithoutCrypto(() => FodId.tryParse(envelopeBase64(p))),
           ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH);
@@ -591,7 +616,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
   });
 
   test('a payload shorter than the header reports PayloadTooShort', () => {
-    for (let length = 0; length < FodId.HEADER_LENGTH; length++) {
+    for (let length = 0; length < layout.HEADER_LENGTH; length++) {
       const p = canonicalPayload().slice(0, length);
       expectFailed(
         readWithoutCrypto(() => FodId.tryParse(envelopeBase64(p))),
@@ -603,12 +628,12 @@ describe('FodId.tryParse and tryFromByteArray', () => {
   });
 
   test('a Reserved payload keeps the best-effort read at any length from the header up', () => {
-    for (const length of [FodId.HEADER_LENGTH, 12, FodId.PAYLOAD_LENGTH + 100]) {
+    for (const length of [layout.HEADER_LENGTH, 12, layout.PAYLOAD_LENGTH + 100]) {
       const p = new Uint8Array(length);
-      p[FodId.FLAGS_OFFSET] = 0b1100_0000;
+      p[layout.FLAGS_OFFSET] = 0b1100_0000;
       const fod = expectParsed(FodId.tryParse(envelopeBase64(p)));
       expect(fod.type).toBe(IdType.RESERVED);
-      expect(fod.matchKey).toHaveLength(length - FodId.HEADER_LENGTH);
+      expect(fod.matchKey).toHaveLength(length - layout.HEADER_LENGTH);
     }
     expectFailed(
       FodId.tryParse(envelopeBase64(Uint8Array.from([0b1100_0000, 0, 0]))),
@@ -626,8 +651,8 @@ describe('FodId.tryParse and tryFromByteArray', () => {
   test('an OWID declaration mismatch is propagated unchanged without any cryptography', () => {
     const bytes = envelopeBytes(canonicalPayload());
     const at = lengthFieldOffset();
-    expect(bytes[at]).toBe(FodId.PAYLOAD_LENGTH); // the field under test
-    bytes[at] = FodId.PAYLOAD_LENGTH + 1; // declares one byte more than sent
+    expect(bytes[at]).toBe(layout.PAYLOAD_LENGTH); // the field under test
+    bytes[at] = layout.PAYLOAD_LENGTH + 1; // declares one byte more than sent
     const encoded = Buffer.from(bytes).toString('base64');
     const owidResult = owid.parseBytes(bytes);
     expect(owidResult.status).toBe(owid.ParseStatus.BYTE_COUNT_MISMATCH);
@@ -737,7 +762,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
       status: ParseStatus.PAYLOAD_TOO_SHORT
     }));
     const shortRandom = envelopeBase64(
-      canonicalRandomPayload().slice(0, FodId.RANDOM_PAYLOAD_LENGTH - 1));
+      canonicalRandomPayload().slice(0, layout.RANDOM_PAYLOAD_LENGTH - 1));
     expect(() => FodId.fromBase64(shortRandom)).toThrow(RangeError);
     expect(() => FodId.fromBase64(shortRandom)).toThrow(
       expect.objectContaining({

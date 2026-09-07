@@ -1,6 +1,7 @@
 import FodId = require("./fodId");
 import FodIdParseError = require("./fodIdParseError");
 import IdType = require("./idType");
+import Usage = require("./usage");
 import { DidClient } from "./didClient";
 import { RedeemResult } from "./didClient";
 import { ContextResult } from "./didClient";
@@ -10,4 +11,4 @@ import { SignatureReason } from "./didClient";
 import { DidClientError } from "./didClient";
 import { DidArgumentError } from "./didClient";
 import { DidNotSupportedError } from "./didClient";
-export { FodId, FodIdParseError, IdType, DidClient, RedeemResult, ContextResult, SignatureResult, FactorResult, SignatureReason, DidClientError, DidArgumentError, DidNotSupportedError };
+export { FodId, FodIdParseError, IdType, Usage, DidClient, RedeemResult, ContextResult, SignatureResult, FactorResult, SignatureReason, DidClientError, DidArgumentError, DidNotSupportedError };
