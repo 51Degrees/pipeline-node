@@ -476,6 +476,33 @@ describe('FodId', () => {
       }
     });
 
+  test('every row of the Terms table agrees with itself', () => {
+    // The row carries the name and the address together, so this fails if
+    // a later change puts either somewhere else and the two disagree, or
+    // if a row is added without an address.
+    for (let index = 0; index < 256; index++) {
+      const terms = Terms.fromIndex(index);
+      const name = Terms.name(terms);
+      const url = Terms.url(terms);
+      if (terms === Terms.UNKNOWN) {
+        expect(name).toBe('Unknown');
+        expect(url).toBeNull();
+        continue;
+      }
+      // A row is reached by its own index and answers a name.
+      expect(terms).toBe(index);
+      expect(typeof name).toBe('string');
+      expect(name.length).toBeGreaterThan(0);
+      if (index === Terms.NOT_STATED) {
+        // Names no document, so it has no address.
+        expect(url).toBeNull();
+      } else {
+        expect(typeof url).toBe('string');
+        expect(url.startsWith('https://')).toBe(true);
+      }
+    }
+  });
+
   test('the Terms table maps every index, name and address', () => {
     expect(Terms.fromIndex(0)).toBe(Terms.NOT_STATED);
     expect(Terms.fromIndex(1)).toBe(Terms.MODEL_TERMS_FOR_MARKETING_2);

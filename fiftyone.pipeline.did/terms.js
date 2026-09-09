@@ -78,8 +78,32 @@
  * https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md
  * which is the authority rather than this comment.
  */
-const NAMES = ['NotStated', 'ModelTermsForMarketing2'];
-const URLS = [null, 'https://m4ow.uk/mtm/2.txt'];
+// The terms table from the specification, which is the whole of the
+// definition of which index is which document. It is published at
+// https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md#terms
+// and this is the only place in the package that carries it.
+//
+// One row per terms document, at the position of the index the payload
+// carries, holding the name for it and the address it stands for. A new
+// terms document is one new row here and one named value below, and nothing
+// else in the package changes. The name and the address sit in the same row
+// so that they cannot be added apart, which two lists side by side allowed.
+//
+// Index 0 has a row because it is a named value the specification gives,
+// and its address is null because it names no document.
+//
+// Each address names an exact version rather than a landing page, because a
+// document at an unversioned address can be edited afterwards and a
+// receiver has to know the document that was in force when the identifier
+// was made.
+const TABLE = [
+  { name: 'NotStated', url: null },
+  { name: 'ModelTermsForMarketing2', url: 'https://m4ow.uk/mtm/2.txt' }
+];
+
+// Not a row, because it stands for every index the table does not carry and
+// so has no index of its own. A Terms index read from a payload is one byte,
+// so it is 0 to 255 and can never be negative.
 const UNKNOWN = -1;
 const UNKNOWN_NAME = 'Unknown';
 const Terms = Object.freeze({
@@ -104,7 +128,7 @@ const Terms = Object.freeze({
    * @returns {number} the Terms value
    */
   fromIndex (index) {
-    return index >= 0 && index < NAMES.length ? index : UNKNOWN;
+    return index >= 0 && index < TABLE.length ? index : UNKNOWN;
   },
   /**
    * The cross language name of a Terms value.
@@ -112,7 +136,7 @@ const Terms = Object.freeze({
    * @returns {string} for example "ModelTermsForMarketing2"
    */
   name (terms) {
-    return terms === UNKNOWN ? UNKNOWN_NAME : NAMES[terms];
+    return terms === UNKNOWN ? UNKNOWN_NAME : TABLE[terms].name;
   },
   /**
    * The address of the terms document a Terms value stands for, or null
@@ -123,7 +147,7 @@ const Terms = Object.freeze({
    * @returns {string|null} for example "https://m4ow.uk/mtm/2.txt"
    */
   url (terms) {
-    return terms === UNKNOWN ? null : URLS[terms];
+    return terms === UNKNOWN ? null : TABLE[terms].url;
   }
 });
 module.exports = Terms;
