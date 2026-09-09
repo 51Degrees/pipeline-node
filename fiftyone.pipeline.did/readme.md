@@ -60,9 +60,8 @@ leaves anything longer for the cloud to judge. A reader built before a longer
 context section existed therefore still reads the identifier.
 
 The Terms byte sits between the match key and the creator context. An
-identifier issued before the byte existed has a payload that ends at the
-match key, and the reader answers with a terms index of zero for one, so
-such an identifier reads exactly as it always did.
+identifier whose payload ends at the match key carries no terms byte, and
+the reader answers with a terms index of zero for one.
 
 ## The usage a 51Did was created for
 
@@ -143,10 +142,11 @@ was created under, so both are needed. An identifier created for
 non-marketing carries `NOT_STATED`, since the Model Terms govern marketing
 use, and it stays barred from a demand source by its usage.
 
-An identifier issued before the byte existed, and one of the `RESERVED` type,
-both read as `NOT_STATED`. The first ends at the match key and the second
-exposes every byte after the header as the match key, so neither leaves a
-byte for the reader to find, and no terms are stated in either.
+An identifier whose payload ends at the match key, and one of the
+`RESERVED` type, both read as `NOT_STATED`. The first carries no byte after
+the match key and the second exposes every byte after the header as the
+match key, so neither leaves a byte for the reader to find, and no terms
+are stated in either.
 
 ## Reading a 51Did
 

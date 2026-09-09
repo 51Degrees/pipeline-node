@@ -339,8 +339,9 @@ describe('FodId', () => {
   // index this package does not know is neither of them.
 
   test('a payload ending at the match key reads as terms not stated', () => {
-    // Every identifier issued before the byte existed is this shape, and
-    // it must read exactly as it always did other than answering zero.
+    // There is no byte after the match key to read, so the reader answers
+    // zero and everything else about the identifier reads as it does when
+    // the byte is present.
     const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
     expect(fod.terms).toBe(Terms.NOT_STATED);
     expect(fod.termsIndex).toBe(0);

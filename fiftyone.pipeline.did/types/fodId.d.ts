@@ -218,10 +218,9 @@ declare class FodId {
      * an index this package does not know is reported as `Terms.UNKNOWN`
      * rather than as `Terms.NOT_STATED`.
      *
-     * An identifier issued before the byte existed ends at the match key and
-     * reads as `Terms.NOT_STATED`, which says the terms are not stated in
-     * the identifier and is the right answer for one issued before there was
-     * anywhere to state them.
+     * An identifier whose payload ends at the match key carries no terms
+     * byte and reads as `Terms.NOT_STATED`, which says the terms are not
+     * stated in the identifier.
      * @returns {number} a Terms value
      */
     get terms(): number;

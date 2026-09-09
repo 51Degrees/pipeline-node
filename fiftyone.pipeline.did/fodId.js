@@ -342,10 +342,9 @@ class FodId {
    * an index this package does not know is reported as `Terms.UNKNOWN`
    * rather than as `Terms.NOT_STATED`.
    *
-   * An identifier issued before the byte existed ends at the match key and
-   * reads as `Terms.NOT_STATED`, which says the terms are not stated in
-   * the identifier and is the right answer for one issued before there was
-   * anywhere to state them.
+   * An identifier whose payload ends at the match key carries no terms
+   * byte and reads as `Terms.NOT_STATED`, which says the terms are not
+   * stated in the identifier.
    * @returns {number} a Terms value
    */
   get terms () {
@@ -512,11 +511,11 @@ function unpack (payload) {
       type
     };
   }
-  // The terms byte sits after the match key, and the payload of an
-  // identifier issued before it existed stops there. A payload with no byte
-  // to read is a terms index of zero, which says the terms are not stated,
-  // so absence and zero are the same answer and neither has to be told from
-  // the other.
+  // The terms byte sits after the match key, so where it sits follows the
+  // match key length the type selects. A payload with no byte to read is a
+  // terms index of zero, which says the terms are not stated, so absence
+  // and zero are the same answer and neither has to be told from the
+  // other.
   //
   // A Reserved type cannot carry a terms byte this reader can find, because
   // the match key length for that type is not defined and every byte after

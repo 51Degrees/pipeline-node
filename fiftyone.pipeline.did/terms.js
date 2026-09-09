@@ -37,9 +37,9 @@
  * never reused or repointed once published, because repointing one would
  * rewrite what a past identifier says it agreed to.
  *
- * An identifier issued before the byte existed has a payload that ends at
- * the match key, and it reads as NOT_STATED, which is the right answer for
- * it because no terms are stated in it. An identifier of the Reserved type
+ * An identifier whose payload ends at the match key carries no terms byte
+ * and reads as NOT_STATED, which is the right answer for it because no
+ * terms are stated in it. An identifier of the Reserved type
  * reads as NOT_STATED too, because the match key length for that type is
  * not defined, so every byte after the header is the match key and no byte
  * is left for a reader to find.
@@ -89,8 +89,8 @@ const Terms = Object.freeze({
   UNKNOWN,
   /**
    * The terms are not stated in the identifier, which is also how an
-   * identifier issued before the byte existed reads. The answer has to
-   * come from the data accompanying the identifier.
+   * identifier whose payload ends at the match key reads. The answer has
+   * to come from the data accompanying the identifier.
    */
   NOT_STATED: 0,
   /** The Model Terms for Marketing, version 2, at https://m4ow.uk/mtm/2.txt. */

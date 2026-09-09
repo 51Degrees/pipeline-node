@@ -9,8 +9,8 @@ declare const Terms: Readonly<{
     UNKNOWN: -1;
     /**
      * The terms are not stated in the identifier, which is also how an
-     * identifier issued before the byte existed reads. The answer has to
-     * come from the data accompanying the identifier.
+     * identifier whose payload ends at the match key reads. The answer has
+     * to come from the data accompanying the identifier.
      */
     NOT_STATED: 0;
     /** The Model Terms for Marketing, version 2, at https://m4ow.uk/mtm/2.txt. */

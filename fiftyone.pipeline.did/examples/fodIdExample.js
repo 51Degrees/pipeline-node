@@ -51,8 +51,8 @@ function uint32LE (v) {
 
 function samplePayload () {
   // One byte longer than the least length, because the terms byte follows
-  // the match key. A 51Did issued before that byte existed stops at the
-  // match key and reads as Terms.NOT_STATED.
+  // the match key. A 51Did whose payload stops at the match key carries
+  // no terms byte and reads as Terms.NOT_STATED.
   const p = new Uint8Array(layout.PAYLOAD_LENGTH + layout.TERMS_LENGTH);
   // Bits 6 and 7 are zero, so the type is Probabilistic. Bits 0 to 2 are
   // the usage and they are cumulative, so 0b011 grants standard
