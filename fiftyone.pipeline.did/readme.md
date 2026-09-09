@@ -34,8 +34,9 @@ question. The summary here explains what the accessors report, and the
 specification governs wherever the two differ.
 
 The payload carries a one byte Flags field, a four byte little-endian
-LicenseId and then the match key. Bits 6 and 7 of the flags name the
-identifier type, which decides how long the match key is.
+LicenseId, the match key and then a one byte Terms. Bits 6 and 7 of the
+flags name the identifier type, which decides how long the match key is,
+and so where the Terms byte sits.
 
 | Bits 7-6 | `IdType`        | Match key length | Least payload accepted |
 |---------:|-----------------|-----------------:|-----------------------:|
@@ -57,6 +58,11 @@ lengths of a context section belong to the cloud, so the reader checks only
 the lower bound for the identifier type, holds no upper bound of its own, and
 leaves anything longer for the cloud to judge. A reader built before a longer
 context section existed therefore still reads the identifier.
+
+The Terms byte sits between the match key and the creator context. An
+identifier issued before the byte existed has a payload that ends at the
+match key, and the reader answers with a terms index of zero for one, so
+such an identifier reads exactly as it always did.
 
 ## The usage a 51Did was created for
 
@@ -87,6 +93,60 @@ usage it is.
 `Usage.name(usage)` gives the cross language name, for example
 `"NonMarketing"`, and `Usage.idUsage(usage)` gives the cloud's own `id.usage`
 value, for example `"non-marketing"`, or `null` for `NONE`.
+
+## The terms a 51Did was created under
+
+A 51Did created for marketing may only be used by a receiver that has
+accepted the terms it was created under, so the terms travel inside the
+identifier rather than beside it. An identifier passed as a query string
+parameter arrives on its own, and any hop can drop what was sent alongside it
+without the identifier looking any different.
+
+The byte after the match key is an index into a table in the specification
+and is not a version number, so that a later document can live at any address
+rather than only at an address a number could be turned into. An index is
+never reused or repointed once published, because repointing one would
+rewrite what a past identifier says it agreed to.
+
+| Index | `Terms` | `termsUrl` |
+| ---: | --- | --- |
+| `0` | `NOT_STATED` | `null` |
+| `1` | `MODEL_TERMS_FOR_MARKETING_2` | `https://m4ow.uk/mtm/2.txt` |
+| anything else | `UNKNOWN` | `null` |
+
+`fodId.terms` is the named value, `fodId.termsIndex` is the byte itself and
+`fodId.termsUrl` is the address, which is `null` for `NOT_STATED` and for
+`UNKNOWN`. `Terms.name(terms)` gives the cross language name, for example
+`"ModelTermsForMarketing2"`, and `Terms.url(terms)` is the same address for a
+`Terms` value you already hold. Nothing here fetches the address, because
+what to do with the document is your decision.
+
+**An index this package does not know is not zero.** A package released
+before an index existed reports `UNKNOWN`, answers with no address, and never
+reads the index as zero. `NOT_STATED` says no terms are stated, whilst
+`UNKNOWN` says terms are stated that this package cannot name, and code
+confusing the two would read an identifier created under terms as one created
+under none. Read `fodId.termsIndex` to find out which index it was, and then
+either update this package or refuse the identifier.
+
+`NOT_STATED` does not mean the identifier is unrestricted. It means only that
+the identifier does not carry the answer, so the answer has to come from the
+data accompanying it, being the Terms Document Locator in an OpenRTB request
+or whatever the surrounding protocol offers. Carrying the terms does not
+remove the need to carry a Terms Document Locator where a protocol has one,
+and where both are present and they disagree the identifier's own value is
+the one that describes the identifier, because it is inside the signature and
+the accompanying data is not.
+
+The usage says where an identifier may go and the terms say which document it
+was created under, so both are needed. An identifier created for
+non-marketing carries `NOT_STATED`, since the Model Terms govern marketing
+use, and it stays barred from a demand source by its usage.
+
+An identifier issued before the byte existed, and one of the `RESERVED` type,
+both read as `NOT_STATED`. The first ends at the match key and the second
+exposes every byte after the header as the match key, so neither leaves a
+byte for the reader to find, and no terms are stated in either.
 
 ## Reading a 51Did
 
@@ -236,7 +296,7 @@ npm test
 ## Usage
 
 ```js
-const { FodId, IdType, Usage } = require('fiftyone.pipeline.did');
+const { FodId, IdType, Usage, Terms } = require('fiftyone.pipeline.did');
 
 // Either base64 alphabet is accepted, the standard one the cloud issues and
 // the URL-safe one a page puts in a link, with or without padding.
@@ -247,6 +307,9 @@ const fromConsent = fodId.usageFromConsent;
 const type = fodId.type;          // IdType.PROBABILISTIC / RANDOM / HASHED_EMAIL
 const licenseId = fodId.licenseId;
 const matchKey = fodId.matchKey;  // Uint8Array: SHA-256 or GUID bytes, see type
+const terms = fodId.terms;        // Terms.NOT_STATED / MODEL_TERMS_FOR_MARKETING_2
+const termsIndex = fodId.termsIndex;  // the byte itself, for an index not known here
+const termsUrl = fodId.termsUrl;  // the address, or null where none is stated
 
 const domain = fodId.domain;
 const minutes = fodId.date;       // minutes since 2020-01-01T00:00:00Z

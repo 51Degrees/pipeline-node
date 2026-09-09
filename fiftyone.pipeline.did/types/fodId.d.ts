@@ -172,6 +172,8 @@ declare class FodId {
     _licenseId: number;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     _matchKey: Uint8Array;
+    /** @type {number} the terms index, zero where the payload carries none */
+    _termsIndex: number;
     /** @returns {number} the IdType carried in bits 6-7 of the flags. */
     get type(): number;
     /**
@@ -210,6 +212,37 @@ declare class FodId {
      * @returns {Uint8Array} a defensive copy of the match key bytes
      */
     get matchKey(): Uint8Array;
+    /**
+     * The terms document this 51Did was created under, read from the byte
+     * after the match key. See Terms for what each value means and for why
+     * an index this package does not know is reported as `Terms.UNKNOWN`
+     * rather than as `Terms.NOT_STATED`.
+     *
+     * An identifier issued before the byte existed ends at the match key and
+     * reads as `Terms.NOT_STATED`, which says the terms are not stated in
+     * the identifier and is the right answer for one issued before there was
+     * anywhere to state them.
+     * @returns {number} a Terms value
+     */
+    get terms(): number;
+    /**
+     * The raw terms index, being the byte itself rather than the value it
+     * stands for. It is here so that a caller meeting an index this package
+     * does not know can say which index it could not read, and look the
+     * document up by hand. Zero for an identifier that carries no terms
+     * byte, because absence and zero say the same thing.
+     * @returns {number} the terms index, 0 to 255
+     */
+    get termsIndex(): number;
+    /**
+     * The address of the terms document this 51Did was created under, or
+     * null where the terms are not stated and where the index is one this
+     * package does not know. Never an empty string, and never an address
+     * built from the index. Nothing here fetches the address, because what
+     * to do with the document is the caller's decision.
+     * @returns {string|null} the address, or null
+     */
+    get termsUrl(): string | null;
     /** @returns {number} the OWID version. */
     get version(): number;
     /** @returns {string} the domain of the OWID creator. */

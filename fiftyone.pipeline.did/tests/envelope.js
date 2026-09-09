@@ -68,6 +68,22 @@ function canonicalRandomPayload () {
   return p;
 }
 
+// The same payload with a terms byte written after the match key, and a
+// creator context section of contextLength bytes after that where one is
+// asked for. The payload given must end at the match key, as both the
+// canonical builders above do, so that the byte lands at the offset a
+// reader works out from the identifier type.
+function withTerms (payload, index, contextLength = 0) {
+  const p = new Uint8Array(
+    payload.length + layout.TERMS_LENGTH + contextLength);
+  p.set(payload);
+  p[payload.length] = index;
+  if (contextLength > 0) {
+    p.fill(0xCC, payload.length + layout.TERMS_LENGTH);
+  }
+  return p;
+}
+
 function uint32LE (v) {
   return [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF];
 }
@@ -162,6 +178,7 @@ module.exports = {
   canonicalMatchKey,
   canonicalPayload,
   canonicalRandomPayload,
+  withTerms,
   noSigBytes,
   envelopeBytes,
   envelopeBase64,

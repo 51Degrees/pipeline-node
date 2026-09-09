@@ -24,6 +24,7 @@ const owid = require('owid');
 const layout = require('./internal/layout');
 const IdType = require('./idType');
 const Usage = require('./usage');
+const Terms = require('./terms');
 const FodIdParseError = require('./fodIdParseError');
 
 /**
@@ -144,6 +145,8 @@ class FodId {
     this._licenseId = read.value._licenseId;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     this._matchKey = read.value._matchKey;
+    /** @type {number} the terms index, zero where the payload carries none */
+    this._termsIndex = read.value._termsIndex;
   }
 
   /**
@@ -333,6 +336,46 @@ class FodId {
     return this._matchKey.slice();
   }
 
+  /**
+   * The terms document this 51Did was created under, read from the byte
+   * after the match key. See Terms for what each value means and for why
+   * an index this package does not know is reported as `Terms.UNKNOWN`
+   * rather than as `Terms.NOT_STATED`.
+   *
+   * An identifier issued before the byte existed ends at the match key and
+   * reads as `Terms.NOT_STATED`, which says the terms are not stated in
+   * the identifier and is the right answer for one issued before there was
+   * anywhere to state them.
+   * @returns {number} a Terms value
+   */
+  get terms () {
+    return Terms.fromIndex(this._termsIndex);
+  }
+
+  /**
+   * The raw terms index, being the byte itself rather than the value it
+   * stands for. It is here so that a caller meeting an index this package
+   * does not know can say which index it could not read, and look the
+   * document up by hand. Zero for an identifier that carries no terms
+   * byte, because absence and zero say the same thing.
+   * @returns {number} the terms index, 0 to 255
+   */
+  get termsIndex () {
+    return this._termsIndex;
+  }
+
+  /**
+   * The address of the terms document this 51Did was created under, or
+   * null where the terms are not stated and where the index is one this
+   * package does not know. Never an empty string, and never an address
+   * built from the index. Nothing here fetches the address, because what
+   * to do with the document is the caller's decision.
+   * @returns {string|null} the address, or null
+   */
+  get termsUrl () {
+    return Terms.url(this.terms);
+  }
+
   /** @returns {number} the OWID version. */
   get version () {
     return this._owid.version;
@@ -421,14 +464,15 @@ class FodId {
  * Reads the 51Did fields out of an envelope payload, answering with a
  * status rather than throwing. This is the one walk of the payload, shared
  * by every surface that reads a 51Did. The type is read from the header and
- * decides the least the payload must hold after the header. Anything beyond
- * the match key is a creator context section whose lengths belong to the
- * cloud, so a longer payload is accepted whatever its length.
+ * decides the least the payload must hold after the header. The terms byte
+ * follows the match key, and anything beyond the terms byte is a creator
+ * context section whose lengths belong to the cloud, so a longer payload is
+ * accepted whatever its length.
  * @param {Uint8Array} payload the payload bytes
  * @returns {{status: string, flags?: number, licenseId?: number,
- * matchKey?: Uint8Array, length: number, required: number, type?: number}}
- * `status` PARSED with the fields, or a 51Did status with the length the
- * type needed
+ * matchKey?: Uint8Array, termsIndex?: number, length: number,
+ * required: number, type?: number}} `status` PARSED with the fields, or a
+ * 51Did status with the length the type needed
  */
 function unpack (payload) {
   const length = payload.length;
@@ -468,6 +512,20 @@ function unpack (payload) {
       type
     };
   }
+  // The terms byte sits after the match key, and the payload of an
+  // identifier issued before it existed stops there. A payload with no byte
+  // to read is a terms index of zero, which says the terms are not stated,
+  // so absence and zero are the same answer and neither has to be told from
+  // the other.
+  //
+  // A Reserved type cannot carry a terms byte this reader can find, because
+  // the match key length for that type is not defined and every byte after
+  // the header is therefore the match key. Such an identifier reads as a
+  // terms index of zero, which is correct and is not a missing case here.
+  const termsOffset = layout.MATCH_KEY_OFFSET + matchKeyLength;
+  const termsIndex = termsOffset + layout.TERMS_LENGTH <= length
+    ? payload[termsOffset]
+    : 0;
   return {
     status: ParseStatus.PARSED,
     flags,
@@ -475,6 +533,7 @@ function unpack (payload) {
     // slice() copies, so the stored match key is this identifier's own.
     matchKey: payload.slice(
       layout.MATCH_KEY_OFFSET, layout.MATCH_KEY_OFFSET + matchKeyLength),
+    termsIndex,
     length,
     required
   };
@@ -505,6 +564,7 @@ function readEnvelope (read) {
   fodId._flags = unpacked.flags;
   fodId._licenseId = unpacked.licenseId;
   fodId._matchKey = unpacked.matchKey;
+  fodId._termsIndex = unpacked.termsIndex;
   return { ok: true, value: fodId, status: ParseStatus.PARSED };
 }
 

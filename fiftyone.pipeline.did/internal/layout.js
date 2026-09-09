@@ -49,6 +49,15 @@ module.exports = Object.freeze({
    * identifiers, being a SHA-256.
    */
   MATCH_KEY_LENGTH: 32,
+  /**
+   * Byte length of the terms field, which follows the match key. Its
+   * offset is not a constant here, because the match key length depends on
+   * the identifier type, so the offset is worked out from the type. A
+   * payload that ends at the match key carries no terms byte and reads as
+   * a terms index of zero, so the least payload lengths below do not
+   * include it.
+   */
+  TERMS_LENGTH: 1,
   /** Byte length of the flags and licence id fields together. */
   HEADER_LENGTH: 5,
   /** Byte length of the GUID match key carried by Random identifiers. */
