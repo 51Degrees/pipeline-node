@@ -2,9 +2,8 @@ export = Terms;
 declare const Terms: Readonly<{
     /**
      * An index this package does not know, being one added to the table
-     * after this package was released. Not the same value as NOT_STATED,
-     * because terms are stated and this package cannot name them. Read the
-     * index itself from termsIndex.
+     * after this package was released. It answers with no address, because
+     * no address may be built from an index the package cannot name.
      */
     UNKNOWN: -1;
     /**

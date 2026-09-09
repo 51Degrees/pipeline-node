@@ -47,7 +47,15 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
    * the match key that type carries after the header (16 GUID bytes for
    * Random, 32 hash bytes for Probabilistic and HashedEmail).
    */
-  INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength'
+  INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength',
+  /**
+   * Bits 4 and 5 of the flags byte name a payload layout version this
+   * package does not know, so no field is read. A later version exists
+   * precisely because a field moved, so reading the payload under the
+   * layout this package knows would answer with values that are wrong
+   * rather than absent.
+   */
+  UNSUPPORTED_PAYLOAD_VERSION: 'UnsupportedPayloadVersion'
 }));
 
 /**
@@ -337,42 +345,26 @@ class FodId {
   }
 
   /**
-   * The terms document this 51Did was created under, read from the byte
-   * after the match key. See Terms for what each value means and for why
-   * an index this package does not know is reported as `Terms.UNKNOWN`
-   * rather than as `Terms.NOT_STATED`.
+   * The address of the terms document this 51Did was created under, read
+   * from the byte after the match key. The byte is an index into a table
+   * in the specification and this package turns the index into the
+   * address, so a caller never handles the byte. Nothing here fetches the
+   * address, because what to do with the document is the caller's
+   * decision.
    *
-   * An identifier whose payload ends at the match key carries no terms
-   * byte and reads as `Terms.NOT_STATED`, which says the terms are not
-   * stated in the identifier.
-   * @returns {number} a Terms value
+   * Null covers both an index of zero, which says the terms are not
+   * stated in the identifier, and an index added to the table after this
+   * package was released, which it cannot name. A caller cannot tell
+   * those two apart, which is deliberate, because both lead to the same
+   * place, being that the identifier does not say which terms it was
+   * created under and the answer has to come from somewhere else. No
+   * address is ever built from an index, since that would name a document
+   * nobody wrote.
+   * @returns {string|null} the address, or null where the identifier names
+   * no document this package knows, which is never an empty string
    */
   get terms () {
-    return Terms.fromIndex(this._termsIndex);
-  }
-
-  /**
-   * The raw terms index, being the byte itself rather than the value it
-   * stands for. It is here so that a caller meeting an index this package
-   * does not know can say which index it could not read, and look the
-   * document up by hand. Zero for an identifier that carries no terms
-   * byte, because absence and zero say the same thing.
-   * @returns {number} the terms index, 0 to 255
-   */
-  get termsIndex () {
-    return this._termsIndex;
-  }
-
-  /**
-   * The address of the terms document this 51Did was created under, or
-   * null where the terms are not stated and where the index is one this
-   * package does not know. Never an empty string, and never an address
-   * built from the index. Nothing here fetches the address, because what
-   * to do with the document is the caller's decision.
-   * @returns {string|null} the address, or null
-   */
-  get termsUrl () {
-    return Terms.url(this.terms);
+    return Terms.url(Terms.fromIndex(this._termsIndex));
   }
 
   /** @returns {number} the OWID version. */
@@ -483,6 +475,20 @@ function unpack (payload) {
     };
   }
   const flags = payload[layout.FLAGS_OFFSET];
+  // The version is read before any field, because a later version exists
+  // precisely because a field moved. Reading a payload of a version this
+  // package does not know under the layout it does know would answer with
+  // values that are wrong rather than absent, which is worse than
+  // refusing, and a version that nothing checks protects nothing.
+  const payloadVersion = (flags >> 4) & 0b11;
+  if (payloadVersion !== layout.SUPPORTED_PAYLOAD_VERSION) {
+    return {
+      status: ParseStatus.UNSUPPORTED_PAYLOAD_VERSION,
+      length,
+      required: layout.HEADER_LENGTH,
+      payloadVersion
+    };
+  }
   // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
   // does not produce a negative number.
   const licenseId = (
@@ -626,6 +632,10 @@ function errorFor (read) {
       `51Did payload for the ${IdType.name(read.detail.type)} type must be ` +
       `at least ${read.detail.required} bytes, and ${read.detail.length} ` +
       'were given.');
+  } else if (read.status === ParseStatus.UNSUPPORTED_PAYLOAD_VERSION) {
+    error = new RangeError(
+      `51Did payload version ${read.detail.payloadVersion} is not one this ` +
+      'package can read.');
   } else {
     return new FodIdParseError(read.status);
   }

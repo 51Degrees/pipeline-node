@@ -21,7 +21,11 @@
  * ********************************************************************* */
 
 const owid = require('owid');
-const { FodId, FodIdParseError, IdType, Usage, Terms } = require('../index');
+const { FodId, FodIdParseError, IdType, Usage } = require('../index');
+// The named value is internal to the package and is not exported, so the
+// table test below reaches the module directly rather than through the
+// package entry point.
+const Terms = require('../terms');
 const {
   DOMAIN,
   DATE,
@@ -31,7 +35,10 @@ const {
   canonicalMatchKey,
   canonicalPayload,
   canonicalRandomPayload,
+  payloadEndingAtMatchKey,
+  randomPayloadEndingAtMatchKey,
   withTerms,
+  withPayloadVersion,
   envelopeBytes,
   envelopeBase64,
   signedVerifiable,
@@ -142,10 +149,13 @@ describe('FodId', () => {
     expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(0);
   });
 
-  test('a flags byte with every bit set is read unchanged', () => {
+  test('every flags bit outside the version is read unchanged', () => {
+    // Bits 4 and 5 are the payload version and only version 0 is read, so
+    // every other bit is set and those two are left clear. A payload with
+    // them set is refused rather than read, which the version tests cover.
     const p = canonicalPayload();
-    p[layout.FLAGS_OFFSET] = 0xFF;
-    expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(255);
+    p[layout.FLAGS_OFFSET] = 0xCF;
+    expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(0xCF);
   });
 
   test('matchKey is a defensive copy', () => {
@@ -338,97 +348,86 @@ describe('FodId', () => {
   // byte after the match key. Absence and zero are the same answer, and an
   // index this package does not know is neither of them.
 
-  test('a payload ending at the match key reads as terms not stated', () => {
+  test('a payload ending at the match key answers with no address', () => {
     // There is no byte after the match key to read, so the reader answers
     // zero and everything else about the identifier reads as it does when
     // the byte is present.
-    const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
-    expect(fod.terms).toBe(Terms.NOT_STATED);
-    expect(fod.termsIndex).toBe(0);
-    expect(fod.termsUrl).toBeNull();
+    const fod = FodId.fromBase64(
+      envelopeBase64(payloadEndingAtMatchKey()));
+    expect(fod.terms).toBeNull();
     expect(fod.matchKey).toEqual(canonicalMatchKey());
     expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
   });
 
-  test('terms index one is the Model Terms for Marketing', () => {
+  test('terms index one is the Model Terms for Marketing address', () => {
     const fod = FodId.fromBase64(
-      envelopeBase64(withTerms(canonicalPayload(), 1)));
-    expect(fod.terms).toBe(Terms.MODEL_TERMS_FOR_MARKETING_2);
-    expect(fod.termsIndex).toBe(1);
-    expect(fod.termsUrl).toBe(MODEL_TERMS_2_URL);
+      envelopeBase64(withTerms(payloadEndingAtMatchKey(), 1)));
+    expect(fod.terms).toBe(MODEL_TERMS_2_URL);
     expect(fod.matchKey).toEqual(canonicalMatchKey());
   });
 
-  test('an index this package does not know reports that index', () => {
-    const fod = FodId.fromBase64(
-      envelopeBase64(withTerms(canonicalPayload(), UNKNOWN_INDEX)));
-    expect(fod.terms).toBe(Terms.UNKNOWN);
-    // The raw index is the whole reason the index is exposed, because a
-    // caller meeting one it cannot name still has to be able to say which
-    // index it was and look the document up by hand.
-    expect(fod.termsIndex).toBe(UNKNOWN_INDEX);
-    expect(fod.termsUrl).toBeNull();
-    // Never an address composed from the index.
-    expect(fod.termsUrl).not.toBe('');
+  test('an index this package does not know has no address', () => {
+    // No address is ever built from an index the package cannot name,
+    // because that would name a document nobody wrote and a receiver
+    // would record having accepted terms that do not exist.
+    for (const index of [2, 127, UNKNOWN_INDEX, 255]) {
+      const fod = FodId.fromBase64(
+        envelopeBase64(withTerms(payloadEndingAtMatchKey(), index)));
+      expect(fod.terms).toBeNull();
+      expect(fod.terms).not.toBe('');
+    }
   });
 
-  test('not stated and an unknown index are told apart', () => {
-    // Zero says no terms are stated, whilst an unknown index says terms
-    // are stated that this package cannot name. A caller reading the
-    // second as the first would treat an identifier created under terms as
-    // one created under none, so the two values must never be equal.
-    const notStated = FodId.fromBase64(envelopeBase64(canonicalPayload()));
-    const unknown = FodId.fromBase64(
-      envelopeBase64(withTerms(canonicalPayload(), UNKNOWN_INDEX)));
-    expect(Terms.NOT_STATED).not.toBe(Terms.UNKNOWN);
-    expect(notStated.terms).not.toBe(unknown.terms);
-    expect(notStated.termsIndex).not.toBe(unknown.termsIndex);
-    expect(Terms.name(notStated.terms)).not.toBe(Terms.name(unknown.terms));
-    // Both answer with no address, so the address cannot tell them apart
-    // and the value has to.
-    expect(notStated.termsUrl).toBeNull();
-    expect(unknown.termsUrl).toBeNull();
-  });
+  test('not stated and an unknown index both answer with no address',
+    () => {
+      // A caller cannot tell the two apart, which is deliberate, since
+      // both say the identifier does not give the terms and the answer
+      // has to come from somewhere else.
+      const notStated = FodId.fromBase64(
+        envelopeBase64(withTerms(payloadEndingAtMatchKey(), 0)));
+      const unknown = FodId.fromBase64(
+        envelopeBase64(withTerms(payloadEndingAtMatchKey(), UNKNOWN_INDEX)));
+      expect(notStated.terms).toBeNull();
+      expect(unknown.terms).toBeNull();
+    });
 
   test('a zero terms byte written out reads the same as none at all', () => {
     const written = FodId.fromBase64(
-      envelopeBase64(withTerms(canonicalPayload(), 0)));
-    const absent = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+      envelopeBase64(withTerms(payloadEndingAtMatchKey(), 0)));
+    const absent = FodId.fromBase64(
+      envelopeBase64(payloadEndingAtMatchKey()));
     expect(written.terms).toBe(absent.terms);
-    expect(written.termsIndex).toBe(absent.termsIndex);
-    expect(written.termsUrl).toBe(absent.termsUrl);
+    expect(written.terms).toBeNull();
   });
 
   // The byte follows the match key, so its offset comes from the identifier
   // type. Reading it at a fixed offset would read a context byte on one
   // type and the wrong end of the match key on the other.
   test.each([
-    ['a 32 byte match key', canonicalPayload, layout.MATCH_KEY_LENGTH],
-    ['a 16 byte match key', canonicalRandomPayload, layout.GUID_LENGTH]
+    ['a 32 byte match key', payloadEndingAtMatchKey,
+      layout.MATCH_KEY_LENGTH],
+    ['a 16 byte match key', randomPayloadEndingAtMatchKey,
+      layout.GUID_LENGTH]
   ])('the terms byte is read after %s', (name, build, matchKeyLength) => {
     const bare = FodId.fromBase64(envelopeBase64(build()));
     expect(bare.matchKey.length).toBe(matchKeyLength);
-    expect(bare.terms).toBe(Terms.NOT_STATED);
-    expect(bare.termsIndex).toBe(0);
-    expect(bare.termsUrl).toBeNull();
+    expect(bare.terms).toBeNull();
 
-    for (const [index, terms, url] of [
-      [0, Terms.NOT_STATED, null],
-      [1, Terms.MODEL_TERMS_FOR_MARKETING_2, MODEL_TERMS_2_URL],
-      [UNKNOWN_INDEX, Terms.UNKNOWN, null]
+    for (const [index, url] of [
+      [0, null],
+      [1, MODEL_TERMS_2_URL],
+      [UNKNOWN_INDEX, null]
     ]) {
       const fod = FodId.fromBase64(envelopeBase64(withTerms(build(), index)));
       expect(fod.matchKey).toEqual(bare.matchKey);
       expect(fod.matchKey.length).toBe(matchKeyLength);
-      expect(fod.terms).toBe(terms);
-      expect(fod.termsIndex).toBe(index);
-      expect(fod.termsUrl).toBe(url);
+      expect(fod.terms).toBe(url);
     }
   });
 
   test.each([
-    ['a 32 byte match key', canonicalPayload],
-    ['a 16 byte match key', canonicalRandomPayload]
+    ['a 32 byte match key', payloadEndingAtMatchKey],
+    ['a 16 byte match key', randomPayloadEndingAtMatchKey]
   ])('a context section after the terms byte leaves it read, with %s',
     (name, build) => {
       // The byte sits before the creator context, so a payload carrying
@@ -448,28 +447,24 @@ describe('FodId', () => {
       ]) {
         expect(fod.matchKey).toEqual(bare.matchKey);
         expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
-        expect(fod.terms).toBe(Terms.MODEL_TERMS_FOR_MARKETING_2);
-        expect(fod.termsIndex).toBe(1);
-        expect(fod.termsUrl).toBe(MODEL_TERMS_2_URL);
+        expect(fod.terms).toBe(MODEL_TERMS_2_URL);
         expect(fod.payload).toHaveLength(p.length);
       }
     });
 
-  test('a Reserved payload reads as terms not stated', () => {
+  test('a Reserved payload answers with no address', () => {
     // A Reserved type is not yet assigned, so everything after the header
     // is exposed as the match key and no byte is left to read as the terms.
     const p = new Uint8Array(layout.MATCH_KEY_OFFSET);
     p[layout.FLAGS_OFFSET] = 0b1100_0000;
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RESERVED);
-    expect(fod.terms).toBe(Terms.NOT_STATED);
-    expect(fod.termsIndex).toBe(0);
-    expect(fod.termsUrl).toBeNull();
+    expect(fod.terms).toBeNull();
   });
 
   test('the terms survive both base64 alphabets and the byte round-trip',
     () => {
-      const p = withTerms(canonicalPayload(), 1);
+      const p = withTerms(payloadEndingAtMatchKey(), 1);
       const first = FodId.fromBase64(envelopeBase64(p));
       for (const again of [
         FodId.fromBase64(first.asBase64()),
@@ -477,8 +472,7 @@ describe('FodId', () => {
         FodId.fromByteArray(first.asByteArray())
       ]) {
         expect(again.terms).toBe(first.terms);
-        expect(again.termsIndex).toBe(first.termsIndex);
-        expect(again.termsUrl).toBe(first.termsUrl);
+        expect(again.terms).toBe(MODEL_TERMS_2_URL);
       }
     });
 
@@ -497,6 +491,68 @@ describe('FodId', () => {
       .toBe(MODEL_TERMS_2_URL);
     expect(Terms.url(Terms.UNKNOWN)).toBeNull();
     expect(Object.isFrozen(Terms)).toBe(true);
+    // The named value is internal, so the package entry point does not
+    // offer it. The address on FodId is the whole of the surface.
+    expect(require('../index').Terms).toBeUndefined();
+  });
+
+  // ----- The payload version -----
+
+  // Bits 4 and 5 of the flags byte say which payload layout the identifier
+  // follows. This package reads version 0 and refuses every other version
+  // rather than reading fields that may have moved.
+
+  test('a flags byte with the version bits clear reads every field', () => {
+    const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+    expect(fod.type).toBe(IdType.HASHED_EMAIL);
+    expect(fod.usage).toBe(Usage.PERSONALIZED);
+    expect(fod.licenseId).toBe(CANONICAL_LICENSE_ID);
+    expect(fod.matchKey).toEqual(canonicalMatchKey());
+    expect(fod.terms).toBe(MODEL_TERMS_2_URL);
+  });
+
+  test.each([[1], [2], [3]])(
+    'payload version %i is refused and names the version', (version) => {
+      const p = withPayloadVersion(canonicalPayload(), version);
+      const read = FodId.tryParse(envelopeBase64(p));
+
+      expect(read.ok).toBe(false);
+      expect(read.status).toBe(ParseStatus.UNSUPPORTED_PAYLOAD_VERSION);
+      // Nothing is handed back, rather than a value with some fields
+      // filled in, because there is no identifier to expose fields for
+      // when the layout was not understood.
+      expect(read.value).toBeNull();
+
+      let thrown = null;
+      try {
+        FodId.fromBase64(envelopeBase64(p));
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).not.toBeNull();
+      expect(thrown.status).toBe(ParseStatus.UNSUPPORTED_PAYLOAD_VERSION);
+      expect(thrown.message).toContain(`version ${version}`);
+    });
+
+  test('the version is read apart from the usage and type bits', () => {
+    // A reader masking the wrong bits would refuse a version 0 identifier
+    // or let a later version through, so every combination is tried.
+    for (const usage of [0b000, 0b001, 0b011, 0b111]) {
+      for (const type of [0b00, 0b10, 0b11]) {
+        const p = payloadEndingAtMatchKey();
+        p[layout.FLAGS_OFFSET] = (type << 6) | usage;
+
+        expect(FodId.tryParse(envelopeBase64(p)).ok).toBe(true);
+
+        for (const version of [1, 2, 3]) {
+          const refused = FodId.tryParse(
+            envelopeBase64(withPayloadVersion(p, version)));
+          expect(refused.status)
+            .toBe(ParseStatus.UNSUPPORTED_PAYLOAD_VERSION);
+          expect(refused.value).toBeNull();
+        }
+      }
+    }
   });
 
   test('reading the address does not fetch it', () => {
@@ -510,9 +566,8 @@ describe('FodId', () => {
     };
     try {
       const fod = FodId.fromBase64(
-        envelopeBase64(withTerms(canonicalPayload(), 1)));
-      expect(fod.termsUrl).toBe(MODEL_TERMS_2_URL);
-      expect(Terms.url(fod.terms)).toBe(MODEL_TERMS_2_URL);
+        envelopeBase64(withTerms(payloadEndingAtMatchKey(), 1)));
+      expect(fod.terms).toBe(MODEL_TERMS_2_URL);
     } finally {
       globalThis.fetch = before;
     }
@@ -727,7 +782,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     }
   }
 
-  test('the status vocabulary is the OWID one plus the two 51Did members', () => {
+  test('the status vocabulary is the OWID one plus the three 51Did members', () => {
     expect(Object.isFrozen(ParseStatus)).toBe(true);
     for (const [name, value] of Object.entries(owid.ParseStatus)) {
       expect(ParseStatus[name]).toBe(value);
@@ -735,8 +790,10 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     expect(ParseStatus.PAYLOAD_TOO_SHORT).toBe('PayloadTooShort');
     expect(ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH)
       .toBe('InvalidTypePayloadLength');
+    expect(ParseStatus.UNSUPPORTED_PAYLOAD_VERSION)
+      .toBe('UnsupportedPayloadVersion');
     expect(Object.keys(ParseStatus))
-      .toHaveLength(Object.keys(owid.ParseStatus).length + 2);
+      .toHaveLength(Object.keys(owid.ParseStatus).length + 3);
     expect(SignatureStatus).toBe(owid.SignatureStatus);
   });
 
@@ -845,7 +902,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
   });
 
   test('an OWID declaration mismatch is propagated unchanged without any cryptography', () => {
-    const bytes = envelopeBytes(canonicalPayload());
+    const bytes = envelopeBytes(payloadEndingAtMatchKey());
     const at = lengthFieldOffset();
     expect(bytes[at]).toBe(layout.PAYLOAD_LENGTH); // the field under test
     bytes[at] = layout.PAYLOAD_LENGTH + 1; // declares one byte more than sent

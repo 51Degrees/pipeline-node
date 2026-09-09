@@ -213,35 +213,25 @@ declare class FodId {
      */
     get matchKey(): Uint8Array;
     /**
-     * The terms document this 51Did was created under, read from the byte
-     * after the match key. See Terms for what each value means and for why
-     * an index this package does not know is reported as `Terms.UNKNOWN`
-     * rather than as `Terms.NOT_STATED`.
+     * The address of the terms document this 51Did was created under, read
+     * from the byte after the match key. The byte is an index into a table
+     * in the specification and this package turns the index into the
+     * address, so a caller never handles the byte. Nothing here fetches the
+     * address, because what to do with the document is the caller's
+     * decision.
      *
-     * An identifier whose payload ends at the match key carries no terms
-     * byte and reads as `Terms.NOT_STATED`, which says the terms are not
-     * stated in the identifier.
-     * @returns {number} a Terms value
+     * Null covers both an index of zero, which says the terms are not
+     * stated in the identifier, and an index added to the table after this
+     * package was released, which it cannot name. A caller cannot tell
+     * those two apart, which is deliberate, because both lead to the same
+     * place, being that the identifier does not say which terms it was
+     * created under and the answer has to come from somewhere else. No
+     * address is ever built from an index, since that would name a document
+     * nobody wrote.
+     * @returns {string|null} the address, or null where the identifier names
+     * no document this package knows, which is never an empty string
      */
-    get terms(): number;
-    /**
-     * The raw terms index, being the byte itself rather than the value it
-     * stands for. It is here so that a caller meeting an index this package
-     * does not know can say which index it could not read, and look the
-     * document up by hand. Zero for an identifier that carries no terms
-     * byte, because absence and zero say the same thing.
-     * @returns {number} the terms index, 0 to 255
-     */
-    get termsIndex(): number;
-    /**
-     * The address of the terms document this 51Did was created under, or
-     * null where the terms are not stated and where the index is one this
-     * package does not know. Never an empty string, and never an address
-     * built from the index. Nothing here fetches the address, because what
-     * to do with the document is the caller's decision.
-     * @returns {string|null} the address, or null
-     */
-    get termsUrl(): string | null;
+    get terms(): string | null;
     /** @returns {number} the OWID version. */
     get version(): number;
     /** @returns {string} the domain of the OWID creator. */

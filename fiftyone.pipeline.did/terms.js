@@ -44,13 +44,16 @@
  * not defined, so every byte after the header is the match key and no byte
  * is left for a reader to find.
  *
- * UNKNOWN is an index added after this package was released. It is
- * deliberately not NOT_STATED, because NOT_STATED says no terms are stated
- * whilst UNKNOWN says terms are stated that this package cannot name, and a
- * caller reading the second as the first would treat an identifier created
- * under terms as one created under none. A caller meeting UNKNOWN should
- * read termsIndex to find out which index it could not read, and then
- * either update this package or refuse the identifier.
+ * This module is internal to the package and is not exported from the
+ * package entry point. The package turns the index into the address that
+ * fodId.terms answers with, so a caller never handles the byte, and the
+ * names here are the ones the specification gives so that every package
+ * describes one document the same way.
+ *
+ * UNKNOWN is an index added after this package was released, so the package
+ * cannot name the document. It answers with no address, as NOT_STATED does,
+ * because no package may build an address from an index it does not know,
+ * since that would name a document nobody wrote.
  *
  * NOT_STATED does not mean the identifier is unrestricted. It means only
  * that the identifier does not carry the answer, so the answer has to come
@@ -82,9 +85,8 @@ const UNKNOWN_NAME = 'Unknown';
 const Terms = Object.freeze({
   /**
    * An index this package does not know, being one added to the table
-   * after this package was released. Not the same value as NOT_STATED,
-   * because terms are stated and this package cannot name them. Read the
-   * index itself from termsIndex.
+   * after this package was released. It answers with no address, because
+   * no address may be built from an index the package cannot name.
    */
   UNKNOWN,
   /**

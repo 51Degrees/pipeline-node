@@ -25,6 +25,12 @@ declare const _exports: Readonly<{
     HEADER_LENGTH: 5;
     /** Byte length of the GUID match key carried by Random identifiers. */
     GUID_LENGTH: 16;
+    /**
+     * The payload layout version this package reads, carried in bits 4 and
+     * 5 of the flags byte. Any other version is refused rather than read
+     * under this layout.
+     */
+    SUPPORTED_PAYLOAD_VERSION: 0;
     /** Least payload length for a Random identifier. */
     RANDOM_PAYLOAD_LENGTH: 21;
     /**

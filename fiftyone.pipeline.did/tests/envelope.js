@@ -32,7 +32,13 @@ const VERSION = 2;
 const SIGNED_VERSION = 3;
 const DOMAIN = '51degrees.com';
 const DATE = 2900000; // minutes since 2020-01-01
-const CANONICAL_FLAGS = 0xA5; // HashedEmail type tag + usage bits
+// HashedEmail type tag in bits 6-7, payload version 0 in bits 4-5 and
+// the personalized marketing usage in bits 0-2.
+const CANONICAL_FLAGS = 0x85;
+// The terms index a marketing identifier carries, being the Model Terms
+// for Marketing version 2, and the zero a non-marketing one carries.
+const MARKETING_TERMS_INDEX = 1;
+const NON_MARKETING_TERMS_INDEX = 0;
 const CANONICAL_LICENSE_ID = 0x12345678;
 const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 
@@ -50,7 +56,10 @@ function writeLicenseId (payload) {
   payload[layout.LICENSE_ID_OFFSET + 3] = 0x12;
 }
 
-function canonicalPayload () {
+// The canonical payload cut off at the end of the match key, so it carries
+// no terms byte. A reader takes that as a terms index of zero, and this is
+// the fixture for that rule rather than anything an issuer would write.
+function payloadEndingAtMatchKey () {
   const p = new Uint8Array(layout.PAYLOAD_LENGTH);
   p[layout.FLAGS_OFFSET] = CANONICAL_FLAGS;
   writeLicenseId(p);
@@ -58,13 +67,38 @@ function canonicalPayload () {
   return p;
 }
 
-function canonicalRandomPayload () {
+// The canonical payload as an issuer writes one, carrying the payload
+// version 0 in its flags byte and the terms byte of the document a
+// personalized marketing identifier is created under. This is the creating
+// side, so it writes every field an issuer writes.
+function canonicalPayload () {
+  return withTerms(payloadEndingAtMatchKey(), MARKETING_TERMS_INDEX);
+}
+
+// The canonical Random payload cut off at the end of its GUID.
+function randomPayloadEndingAtMatchKey () {
   const p = new Uint8Array(layout.RANDOM_PAYLOAD_LENGTH);
   p[layout.FLAGS_OFFSET] = (1 << 6) | 0b001; // Random tag + usage bits
   writeLicenseId(p);
   for (let i = 0; i < layout.GUID_LENGTH; i++) {
     p[layout.MATCH_KEY_OFFSET + i] = 0x40 + i;
   }
+  return p;
+}
+
+// The canonical Random payload as an issuer writes one, carrying the zero
+// terms byte a non-marketing identifier carries.
+function canonicalRandomPayload () {
+  return withTerms(
+    randomPayloadEndingAtMatchKey(), NON_MARKETING_TERMS_INDEX);
+}
+
+// The same payload with its version bits set to the given version, leaving
+// every other bit of the flags byte alone.
+function withPayloadVersion (payload, version) {
+  const p = payload.slice();
+  p[layout.FLAGS_OFFSET] =
+    (payload[layout.FLAGS_OFFSET] & 0b11001111) | (version << 4);
   return p;
 }
 
@@ -173,12 +207,17 @@ module.exports = {
   DOMAIN,
   DATE,
   CANONICAL_FLAGS,
+  MARKETING_TERMS_INDEX,
+  NON_MARKETING_TERMS_INDEX,
   CANONICAL_LICENSE_ID,
   DUMMY_SIG,
   canonicalMatchKey,
   canonicalPayload,
   canonicalRandomPayload,
+  payloadEndingAtMatchKey,
+  randomPayloadEndingAtMatchKey,
   withTerms,
+  withPayloadVersion,
   noSigBytes,
   envelopeBytes,
   envelopeBase64,

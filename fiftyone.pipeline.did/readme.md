@@ -63,6 +63,23 @@ The Terms byte sits between the match key and the creator context. An
 identifier whose payload ends at the match key carries no terms byte, and
 the reader answers with a terms index of zero for one.
 
+## The payload version
+
+Bits 4 and 5 of the flags byte say which payload layout the identifier
+follows, and this package reads version 0. A payload naming version 1, 2 or
+3 is refused with `ParseStatus.UNSUPPORTED_PAYLOAD_VERSION`, and the errors
+the throwing surfaces raise name the version they found.
+
+No field is read under the layout this package knows once the version says
+otherwise. A later version exists precisely because a field moved, so
+reading such a payload here would answer with values that are wrong rather
+than absent, which is worse than refusing. A version that nothing checks
+protects nothing.
+
+The version is not exposed. Either this package read the layout, in which
+case the accessors are the answer, or it did not, in which case there is no
+identifier to read fields from.
+
 ## The usage a 51Did was created for
 
 Every 51Did says what it was created for, and `fodId.usage` reports it as one
@@ -107,28 +124,24 @@ rather than only at an address a number could be turned into. An index is
 never reused or repointed once published, because repointing one would
 rewrite what a past identifier says it agreed to.
 
-| Index | `Terms` | `termsUrl` |
+| Index | Document | `fodId.terms` |
 | ---: | --- | --- |
-| `0` | `NOT_STATED` | `null` |
-| `1` | `MODEL_TERMS_FOR_MARKETING_2` | `https://m4ow.uk/mtm/2.txt` |
-| anything else | `UNKNOWN` | `null` |
+| `0` | Not stated in the identifier | `null` |
+| `1` | Model Terms for Marketing, version 2 | `https://m4ow.uk/mtm/2.txt` |
+| anything else | One this package cannot name | `null` |
 
-`fodId.terms` is the named value, `fodId.termsIndex` is the byte itself and
-`fodId.termsUrl` is the address, which is `null` for `NOT_STATED` and for
-`UNKNOWN`. `Terms.name(terms)` gives the cross language name, for example
-`"ModelTermsForMarketing2"`, and `Terms.url(terms)` is the same address for a
-`Terms` value you already hold. Nothing here fetches the address, because
-what to do with the document is your decision.
+`fodId.terms` is the address of the document. The package turns the index
+into the address, so you never handle the byte. Nothing here fetches the
+address, because what to do with the document is your decision.
 
-**An index this package does not know is not zero.** A package released
-before an index existed reports `UNKNOWN`, answers with no address, and never
-reads the index as zero. `NOT_STATED` says no terms are stated, whilst
-`UNKNOWN` says terms are stated that this package cannot name, and code
-confusing the two would read an identifier created under terms as one created
-under none. Read `fodId.termsIndex` to find out which index it was, and then
-either update this package or refuse the identifier.
+**No address is ever built from an index this package cannot name**, because
+that would name a document nobody wrote and a receiver would record having
+accepted terms that do not exist. An index of zero and an index added after
+this package was released therefore give the same answer, which you cannot
+tell apart, and that is deliberate, since both say the identifier does not
+give the terms and the answer has to come from somewhere else.
 
-`NOT_STATED` does not mean the identifier is unrestricted. It means only that
+No address does not mean the identifier is unrestricted. It means only that
 the identifier does not carry the answer, so the answer has to come from the
 data accompanying it, being the Terms Document Locator in an OpenRTB request
 or whatever the surrounding protocol offers. Carrying the terms does not
@@ -307,9 +320,9 @@ const fromConsent = fodId.usageFromConsent;
 const type = fodId.type;          // IdType.PROBABILISTIC / RANDOM / HASHED_EMAIL
 const licenseId = fodId.licenseId;
 const matchKey = fodId.matchKey;  // Uint8Array: SHA-256 or GUID bytes, see type
-const terms = fodId.terms;        // Terms.NOT_STATED / MODEL_TERMS_FOR_MARKETING_2
-const termsIndex = fodId.termsIndex;  // the byte itself, for an index not known here
-const termsUrl = fodId.termsUrl;  // the address, or null where none is stated
+const terms = fodId.terms;        // address of the terms document it was
+                                  // created under, null where it names none
+                                  // this package knows
 
 const domain = fodId.domain;
 const minutes = fodId.date;       // minutes since 2020-01-01T00:00:00Z

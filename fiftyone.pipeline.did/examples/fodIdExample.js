@@ -33,7 +33,7 @@
  */
 
 const { webcrypto } = require('crypto');
-const { FodId, IdType, Usage, Terms } = require('../index');
+const { FodId, IdType, Usage } = require('../index');
 // The payload byte layout is internal to the package, so a consumer
 // never reaches for it. This example builds a sample 51Did to work on,
 // which the cloud would otherwise issue, so it reads the layout from
@@ -54,9 +54,10 @@ function samplePayload () {
   // the match key. A 51Did whose payload stops at the match key carries
   // no terms byte and reads as Terms.NOT_STATED.
   const p = new Uint8Array(layout.PAYLOAD_LENGTH + layout.TERMS_LENGTH);
-  // Bits 6 and 7 are zero, so the type is Probabilistic. Bits 0 to 2 are
-  // the usage and they are cumulative, so 0b011 grants standard
-  // marketing and, with it, non-marketing use.
+  // Bits 6 and 7 are zero, so the type is Probabilistic. Bits 4 and 5 are
+  // zero, so the payload version is 0, which is the layout this package
+  // reads. Bits 0 to 2 are the usage and they are cumulative, so 0b011
+  // grants standard marketing and, with it, non-marketing use.
   p[layout.FLAGS_OFFSET] = 0b0000_0011;
   p[layout.LICENSE_ID_OFFSET] = 0x78;
   p[layout.LICENSE_ID_OFFSET + 1] = 0x56;
@@ -67,8 +68,9 @@ function samplePayload () {
   }
   // The terms document this sample was created under, being index 1, the
   // Model Terms for Marketing version 2. The byte is an index into a table
-  // in the specification and is not a version number.
-  p[layout.PAYLOAD_LENGTH] = Terms.MODEL_TERMS_FOR_MARKETING_2;
+  // in the specification and is not a version number, and an issuer writes
+  // it for every marketing identifier.
+  p[layout.PAYLOAD_LENGTH] = 1;
   return p;
 }
 
@@ -114,9 +116,7 @@ async function run () {
   console.log('  From cons.:', fodId.usageFromConsent);
   console.log('  LicenseId :', fodId.licenseId);
   console.log('  Match key :', Buffer.from(fodId.matchKey).toString('hex'));
-  console.log('  Terms     :', Terms.name(fodId.terms));
-  console.log('  Terms idx :', fodId.termsIndex);
-  console.log('  Terms url :', fodId.termsUrl);
+  console.log('  Terms     :', fodId.terms);
   console.log('  Verifies  :', await fodId.verify(publicPem));
 
   // Re-issue the same payload at a later time. The envelope differs and the
