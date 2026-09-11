@@ -462,8 +462,10 @@ class FodId {
  * @param {Uint8Array} payload the payload bytes
  * @returns {{status: string, flags?: number, licenseId?: number,
  * matchKey?: Uint8Array, termsIndex?: number, length: number,
- * required: number, type?: number}} `status` PARSED with the fields, or a
- * 51Did status with the length the type needed
+ * required: number, type?: number, payloadVersion?: number}} `status`
+ * PARSED with the fields, or a 51Did status with the length the type
+ * needed, and the version found where that is what the payload was refused
+ * for
  */
 function unpack (payload) {
   const length = payload.length;
@@ -614,7 +616,7 @@ function valueOrThrow (read) {
 }
 
 /**
- * The exception for a failed read. The two 51Did payload statuses keep the
+ * The exception for a failed read. The three 51Did payload statuses keep the
  * RangeError this package has always thrown for them, and every OWID status
  * is a FodIdParseError carrying the status. Each error carries `status` so
  * the reason can be acted on without reading the message.

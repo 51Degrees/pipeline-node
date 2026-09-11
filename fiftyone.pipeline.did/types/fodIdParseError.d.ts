@@ -5,7 +5,7 @@ export = FodIdParseError;
  * constructor) when the OWID library refused the envelope. The status names
  * the reason in the same vocabulary the non-throwing surfaces report, so a
  * caller catching this can act on the reason without reading the message.
- * The two 51Did payload statuses are thrown as RangeError instead, as this
+ * The three 51Did payload statuses are thrown as RangeError instead, as this
  * package has always thrown them, and that RangeError carries `status` too.
  */
 declare class FodIdParseError extends Error {

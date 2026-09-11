@@ -197,7 +197,7 @@ reads successfully and then fails verification. Verify with
 
 `FodId.ParseStatus` is a frozen object of stable string values. Compare
 against its members rather than against the text of any message. The
-vocabulary is the OWID library's own, carried through unchanged, plus two
+vocabulary is the OWID library's own, carried through unchanged, plus three
 members for the 51Did payload. A failure the OWID library reported keeps the
 OWID library's status, so a specific reason is never reduced to a general one.
 
@@ -216,6 +216,7 @@ OWID library's status, so a specific reason is never reduced to a general one.
 | `MALFORMED_ENVELOPE` | OWID | Malformed in a way none of the above describes |
 | `PAYLOAD_TOO_SHORT` | 51Did | The payload is shorter than the 5 byte header (flags and licence id), so the type cannot be read |
 | `INVALID_TYPE_PAYLOAD_LENGTH` | 51Did | The header named a type and the payload is shorter than that type's match key needs, being 21 bytes for Random and 37 for Probabilistic and HashedEmail |
+| `UNSUPPORTED_PAYLOAD_VERSION` | 51Did | Bits 4 and 5 of the flags byte name a payload layout version this package does not know, so no field is read |
 
 A Reserved type is not yet assigned, so the reader accepts it at any length
 from the header up and exposes whatever follows the header as the match key.
@@ -229,7 +230,7 @@ exception. They run the same checks, in the same order, and throw:
 | Thrown | When |
 | --- | --- |
 | `TypeError` | The argument is the wrong kind of thing, being `null`, `undefined`, a non-string to `fromBase64`, or a non-`Uint8Array` to `fromByteArray` |
-| `RangeError` | The payload is `PAYLOAD_TOO_SHORT` or `INVALID_TYPE_PAYLOAD_LENGTH`. The error carries `status` |
+| `RangeError` | The payload is `PAYLOAD_TOO_SHORT`, `INVALID_TYPE_PAYLOAD_LENGTH` or `UNSUPPORTED_PAYLOAD_VERSION`, being the three statuses the 51Did payload rules produce. The error carries `status` |
 | `FodIdParseError` | The OWID library refused the envelope for any other status. The error carries `status` |
 
 A wrong argument type is a programming error and stays exceptional on every

@@ -1034,7 +1034,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     expect(() => FodId.fromByteArray(null)).toThrow(TypeError);
     expect(() => FodId.fromByteArray('QUJD')).toThrow(TypeError);
 
-    // The two 51Did payload statuses stay RangeError, now carrying the
+    // The three 51Did payload statuses stay RangeError, now carrying the
     // status as well.
     const tooShort = envelopeBase64(new Uint8Array(3));
     expect(() => FodId.fromBase64(tooShort)).toThrow(RangeError);
@@ -1050,6 +1050,16 @@ describe('FodId.tryParse and tryFromByteArray', () => {
       }));
     expect(() => FodId.fromByteArray(envelopeBytes(new Uint8Array(0))))
       .toThrow(RangeError);
+    // A refused payload version is the third of them, and is a RangeError
+    // and not a FodIdParseError, because the version is a rule this package
+    // applies to the payload rather than anything the OWID library judged.
+    const wrongVersion = envelopeBase64(
+      withPayloadVersion(canonicalPayload(), 1));
+    expect(() => FodId.fromBase64(wrongVersion)).toThrow(RangeError);
+    expect(() => FodId.fromBase64(wrongVersion)).toThrow(
+      expect.objectContaining({
+        status: ParseStatus.UNSUPPORTED_PAYLOAD_VERSION
+      }));
 
     // An OWID status is a FodIdParseError carrying that status.
     expect(() => FodId.fromBase64('****')).toThrow(FodIdParseError);
