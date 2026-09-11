@@ -24,7 +24,7 @@ const owid = require('owid');
 const layout = require('./internal/layout');
 const IdType = require('./idType');
 const Usage = require('./usage');
-const Terms = require('./terms');
+const Terms = require('./internal/terms');
 const FodIdParseError = require('./fodIdParseError');
 
 /**
@@ -532,7 +532,7 @@ function unpack (payload) {
   const termsOffset = layout.MATCH_KEY_OFFSET + matchKeyLength;
   const termsIndex = termsOffset + layout.TERMS_LENGTH <= length
     ? payload[termsOffset]
-    : 0;
+    : Terms.NOT_STATED;
   return {
     status: ParseStatus.PARSED,
     flags,

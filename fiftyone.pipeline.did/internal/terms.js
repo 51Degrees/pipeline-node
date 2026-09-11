@@ -44,8 +44,10 @@
  * not defined, so every byte after the header is the match key and no byte
  * is left for a reader to find.
  *
- * This module is internal to the package and is not exported from the
- * package entry point. The package turns the index into the address that
+ * This module is internal to the package. It sits beside layout.js on the
+ * internal path, and is not exported from the package entry point nor
+ * reachable as a subpath, because the exports map in package.json offers
+ * only the entry point. The package turns the index into the address that
  * fodId.terms answers with, so a caller never handles the byte, and the
  * names here are the ones the specification gives so that every package
  * describes one document the same way.
@@ -108,6 +110,19 @@ const TABLE = [
 // so it is 0 to 255 and can never be negative.
 const UNKNOWN = -1;
 const UNKNOWN_NAME = 'Unknown';
+
+/**
+ * The table row a Terms value stands for, and null where the value is not
+ * a row, being UNKNOWN or anything else outside the table. Every lookup
+ * goes through here so that the bounds are decided once and no lookup
+ * subscripts the table with a value it has not checked, which would raise
+ * at the caller rather than answer with no address.
+ * @param {number} terms a Terms value
+ * @returns {{name: string, url: string|null}|null} the row, or null
+ */
+function rowFor (terms) {
+  return terms >= 0 && terms < TABLE.length ? TABLE[terms] : null;
+}
 const Terms = Object.freeze({
   /**
    * An index this package does not know, being one added to the table
@@ -130,7 +145,7 @@ const Terms = Object.freeze({
    * @returns {number} the Terms value
    */
   fromIndex (index) {
-    return index >= 0 && index < TABLE.length ? index : UNKNOWN;
+    return rowFor(index) === null ? UNKNOWN : index;
   },
   /**
    * The cross language name of a Terms value.
@@ -138,7 +153,8 @@ const Terms = Object.freeze({
    * @returns {string} for example "ModelTermsForMarketing2"
    */
   name (terms) {
-    return terms === UNKNOWN ? UNKNOWN_NAME : TABLE[terms].name;
+    const row = rowFor(terms);
+    return row === null ? UNKNOWN_NAME : row.name;
   },
   /**
    * The address of the terms document a Terms value stands for, or null
@@ -149,7 +165,8 @@ const Terms = Object.freeze({
    * @returns {string|null} for example "https://m4ow.uk/mtm/2.txt"
    */
   url (terms) {
-    return terms === UNKNOWN ? null : TABLE[terms].url;
+    const row = rowFor(terms);
+    return row === null ? null : row.url;
   }
 });
 module.exports = Terms;

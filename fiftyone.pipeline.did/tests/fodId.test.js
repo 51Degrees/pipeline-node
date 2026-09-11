@@ -25,7 +25,7 @@ const { FodId, FodIdParseError, IdType, Usage } = require('../index');
 // The named value is internal to the package and is not exported, so the
 // table test below reaches the module directly rather than through the
 // package entry point.
-const Terms = require('../terms');
+const Terms = require('../internal/terms');
 const {
   DOMAIN,
   DATE,
@@ -517,6 +517,11 @@ describe('FodId', () => {
     expect(Terms.url(Terms.MODEL_TERMS_FOR_MARKETING_2))
       .toBe(MODEL_TERMS_2_URL);
     expect(Terms.url(Terms.UNKNOWN)).toBeNull();
+    // A value that is not a row answers rather than raising, so a lookup
+    // never reaches the caller as a TypeError from a table subscript.
+    expect(Terms.url(99)).toBeNull();
+    expect(Terms.name(99)).toBe('Unknown');
+    expect(Terms.url(-2)).toBeNull();
     expect(Object.isFrozen(Terms)).toBe(true);
     // The named value is internal, so the package entry point does not
     // offer it. The address on FodId is the whole of the surface.
