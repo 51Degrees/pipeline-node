@@ -172,6 +172,8 @@ declare class FodId {
     _licenseId: number;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     _matchKey: Uint8Array;
+    /** @type {number} the terms index, zero where the payload carries none */
+    _termsIndex: number;
     /** @returns {number} the IdType carried in bits 6-7 of the flags. */
     get type(): number;
     /**
@@ -210,6 +212,26 @@ declare class FodId {
      * @returns {Uint8Array} a defensive copy of the match key bytes
      */
     get matchKey(): Uint8Array;
+    /**
+     * The address of the terms document this 51Did was created under, read
+     * from the byte after the match key. The byte is an index into a table
+     * in the specification and this package turns the index into the
+     * address, so a caller never handles the byte. Nothing here fetches the
+     * address, because what to do with the document is the caller's
+     * decision.
+     *
+     * Null covers both an index of zero, which says the terms are not
+     * stated in the identifier, and an index added to the table after this
+     * package was released, which it cannot name. A caller cannot tell
+     * those two apart, which is deliberate, because both lead to the same
+     * place, being that the identifier does not say which terms it was
+     * created under and the answer has to come from somewhere else. No
+     * address is ever built from an index, since that would name a document
+     * nobody wrote.
+     * @returns {string|null} the address, or null where the identifier names
+     * no document this package knows, which is never an empty string
+     */
+    get terms(): string | null;
     /** @returns {number} the OWID version. */
     get version(): number;
     /** @returns {string} the domain of the OWID creator. */

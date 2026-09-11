@@ -25,8 +25,8 @@
  *
  * The 51Degrees Cloud service issues real 51Dids. To keep this example
  * self-contained and offline, it builds a sample 51Did in process - generate
- * an ECDSA P-256 key pair, sign a canonical 37-byte payload - then parses it
- * back and prints the three payload fields. It also shows the headline use
+ * an ECDSA P-256 key pair, sign a canonical payload - then parses it back
+ * and prints the payload fields. It also shows the headline use
  * case: a 51Did is re-issued fresh on every call (the envelope, hence the
  * base64, changes), but the match key is stable. Compare match keys, never
  * envelopes.
@@ -50,10 +50,14 @@ function uint32LE (v) {
 }
 
 function samplePayload () {
-  const p = new Uint8Array(layout.PAYLOAD_LENGTH);
-  // Bits 6 and 7 are zero, so the type is Probabilistic. Bits 0 to 2 are
-  // the usage and they are cumulative, so 0b011 grants standard
-  // marketing and, with it, non-marketing use.
+  // One byte longer than the least length, because the terms byte follows
+  // the match key. A 51Did whose payload stops at the match key carries
+  // no terms byte and reads as Terms.NOT_STATED.
+  const p = new Uint8Array(layout.PAYLOAD_LENGTH + layout.TERMS_LENGTH);
+  // Bits 6 and 7 are zero, so the type is Probabilistic. Bits 4 and 5 are
+  // zero, so the payload version is 0, which is the layout this package
+  // reads. Bits 0 to 2 are the usage and they are cumulative, so 0b011
+  // grants standard marketing and, with it, non-marketing use.
   p[layout.FLAGS_OFFSET] = 0b0000_0011;
   p[layout.LICENSE_ID_OFFSET] = 0x78;
   p[layout.LICENSE_ID_OFFSET + 1] = 0x56;
@@ -62,6 +66,11 @@ function samplePayload () {
   for (let i = 0; i < layout.MATCH_KEY_LENGTH; i++) {
     p[layout.MATCH_KEY_OFFSET + i] = 0x20 + i;
   }
+  // The terms document this sample was created under, being index 1, the
+  // Model Terms for Marketing version 2. The byte is an index into a table
+  // in the specification and is not a version number, and an issuer writes
+  // it for every marketing identifier.
+  p[layout.PAYLOAD_LENGTH] = 1;
   return p;
 }
 
@@ -107,6 +116,7 @@ async function run () {
   console.log('  From cons.:', fodId.usageFromConsent);
   console.log('  LicenseId :', fodId.licenseId);
   console.log('  Match key :', Buffer.from(fodId.matchKey).toString('hex'));
+  console.log('  Terms     :', fodId.terms);
   console.log('  Verifies  :', await fodId.verify(publicPem));
 
   // Re-issue the same payload at a later time. The envelope differs and the

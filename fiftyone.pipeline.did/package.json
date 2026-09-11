@@ -1,7 +1,7 @@
 {
   "name": "fiftyone.pipeline.did",
   "version": "4.5.0",
-  "description": "Strongly typed reader for the 51Did (51Degrees Identifier) value returned by the 51Degrees Cloud service. Parses the OWID envelope and exposes the usage, licence id and match key plus the identifier type. Compare match keys, never envelopes.",
+  "description": "Strongly typed reader for the 51Did (51Degrees Identifier) value returned by the 51Degrees Cloud service. Parses the OWID envelope and exposes the usage, licence id, match key and terms document plus the identifier type. Compare match keys, never envelopes.",
   "keywords": [
     "51degrees",
     "51did",

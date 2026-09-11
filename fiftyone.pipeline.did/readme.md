@@ -34,8 +34,9 @@ question. The summary here explains what the accessors report, and the
 specification governs wherever the two differ.
 
 The payload carries a one byte Flags field, a four byte little-endian
-LicenseId and then the match key. Bits 6 and 7 of the flags name the
-identifier type, which decides how long the match key is.
+LicenseId, the match key and then a one byte Terms. Bits 6 and 7 of the
+flags name the identifier type, which decides how long the match key is,
+and so where the Terms byte sits.
 
 | Bits 7-6 | `IdType`        | Match key length | Least payload accepted |
 |---------:|-----------------|-----------------:|-----------------------:|
@@ -57,6 +58,27 @@ lengths of a context section belong to the cloud, so the reader checks only
 the lower bound for the identifier type, holds no upper bound of its own, and
 leaves anything longer for the cloud to judge. A reader built before a longer
 context section existed therefore still reads the identifier.
+
+The Terms byte sits between the match key and the creator context. An
+identifier whose payload ends at the match key carries no terms byte, and
+the reader answers with a terms index of zero for one.
+
+## The payload version
+
+Bits 4 and 5 of the flags byte say which payload layout the identifier
+follows, and this package reads version 0. A payload naming version 1, 2 or
+3 is refused with `ParseStatus.UNSUPPORTED_PAYLOAD_VERSION`, and the errors
+the throwing surfaces raise name the version they found.
+
+No field is read under the layout this package knows once the version says
+otherwise. A later version exists precisely because a field moved, so
+reading such a payload here would answer with values that are wrong rather
+than absent, which is worse than refusing. A version that nothing checks
+protects nothing.
+
+The version is not exposed. Either this package read the layout, in which
+case the accessors are the answer, or it did not, in which case there is no
+identifier to read fields from.
 
 ## The usage a 51Did was created for
 
@@ -87,6 +109,57 @@ usage it is.
 `Usage.name(usage)` gives the cross language name, for example
 `"NonMarketing"`, and `Usage.idUsage(usage)` gives the cloud's own `id.usage`
 value, for example `"non-marketing"`, or `null` for `NONE`.
+
+## The terms a 51Did was created under
+
+A 51Did created for marketing may only be used by a receiver that has
+accepted the terms it was created under, so the terms travel inside the
+identifier rather than beside it. An identifier passed as a query string
+parameter arrives on its own, and any hop can drop what was sent alongside it
+without the identifier looking any different.
+
+The byte after the match key is an index into a table in the specification
+and is not a version number, so that a later document can live at any address
+rather than only at an address a number could be turned into. An index is
+never reused or repointed once published, because repointing one would
+rewrite what a past identifier says it agreed to.
+
+| Index | Document | `fodId.terms` |
+| ---: | --- | --- |
+| `0` | Not stated in the identifier | `null` |
+| `1` | Model Terms for Marketing, version 2 | `https://m4ow.uk/mtm/2.txt` |
+| anything else | One this package cannot name | `null` |
+
+`fodId.terms` is the address of the document. The package turns the index
+into the address, so you never handle the byte. Nothing here fetches the
+address, because what to do with the document is your decision.
+
+**No address is ever built from an index this package cannot name**, because
+that would name a document nobody wrote and a receiver would record having
+accepted terms that do not exist. An index of zero and an index added after
+this package was released therefore give the same answer, which you cannot
+tell apart, and that is deliberate, since both say the identifier does not
+give the terms and the answer has to come from somewhere else.
+
+No address does not mean the identifier is unrestricted. It means only that
+the identifier does not carry the answer, so the answer has to come from the
+data accompanying it, being the Terms Document Locator in an OpenRTB request
+or whatever the surrounding protocol offers. Carrying the terms does not
+remove the need to carry a Terms Document Locator where a protocol has one,
+and where both are present and they disagree the identifier's own value is
+the one that describes the identifier, because it is inside the signature and
+the accompanying data is not.
+
+The usage says where an identifier may go and the terms say which document it
+was created under, so both are needed. An identifier created for
+non-marketing carries `NOT_STATED`, since the Model Terms govern marketing
+use, and it stays barred from a demand source by its usage.
+
+An identifier whose payload ends at the match key, and one of the
+`RESERVED` type, both read as `NOT_STATED`. The first carries no byte after
+the match key and the second exposes every byte after the header as the
+match key, so neither leaves a byte for the reader to find, and no terms
+are stated in either.
 
 ## Reading a 51Did
 
@@ -124,7 +197,7 @@ reads successfully and then fails verification. Verify with
 
 `FodId.ParseStatus` is a frozen object of stable string values. Compare
 against its members rather than against the text of any message. The
-vocabulary is the OWID library's own, carried through unchanged, plus two
+vocabulary is the OWID library's own, carried through unchanged, plus three
 members for the 51Did payload. A failure the OWID library reported keeps the
 OWID library's status, so a specific reason is never reduced to a general one.
 
@@ -143,6 +216,7 @@ OWID library's status, so a specific reason is never reduced to a general one.
 | `MALFORMED_ENVELOPE` | OWID | Malformed in a way none of the above describes |
 | `PAYLOAD_TOO_SHORT` | 51Did | The payload is shorter than the 5 byte header (flags and licence id), so the type cannot be read |
 | `INVALID_TYPE_PAYLOAD_LENGTH` | 51Did | The header named a type and the payload is shorter than that type's match key needs, being 21 bytes for Random and 37 for Probabilistic and HashedEmail |
+| `UNSUPPORTED_PAYLOAD_VERSION` | 51Did | Bits 4 and 5 of the flags byte name a payload layout version this package does not know, so no field is read |
 
 A Reserved type is not yet assigned, so the reader accepts it at any length
 from the header up and exposes whatever follows the header as the match key.
@@ -156,7 +230,7 @@ exception. They run the same checks, in the same order, and throw:
 | Thrown | When |
 | --- | --- |
 | `TypeError` | The argument is the wrong kind of thing, being `null`, `undefined`, a non-string to `fromBase64`, or a non-`Uint8Array` to `fromByteArray` |
-| `RangeError` | The payload is `PAYLOAD_TOO_SHORT` or `INVALID_TYPE_PAYLOAD_LENGTH`. The error carries `status` |
+| `RangeError` | The payload is `PAYLOAD_TOO_SHORT`, `INVALID_TYPE_PAYLOAD_LENGTH` or `UNSUPPORTED_PAYLOAD_VERSION`, being the three statuses the 51Did payload rules produce. The error carries `status` |
 | `FodIdParseError` | The OWID library refused the envelope for any other status. The error carries `status` |
 
 A wrong argument type is a programming error and stays exceptional on every
@@ -236,7 +310,7 @@ npm test
 ## Usage
 
 ```js
-const { FodId, IdType, Usage } = require('fiftyone.pipeline.did');
+const { FodId, IdType, Usage, Terms } = require('fiftyone.pipeline.did');
 
 // Either base64 alphabet is accepted, the standard one the cloud issues and
 // the URL-safe one a page puts in a link, with or without padding.
@@ -247,6 +321,9 @@ const fromConsent = fodId.usageFromConsent;
 const type = fodId.type;          // IdType.PROBABILISTIC / RANDOM / HASHED_EMAIL
 const licenseId = fodId.licenseId;
 const matchKey = fodId.matchKey;  // Uint8Array: SHA-256 or GUID bytes, see type
+const terms = fodId.terms;        // address of the terms document it was
+                                  // created under, null where it names none
+                                  // this package knows
 
 const domain = fodId.domain;
 const minutes = fodId.date;       // minutes since 2020-01-01T00:00:00Z

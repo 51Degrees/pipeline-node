@@ -24,6 +24,7 @@ const owid = require('owid');
 const layout = require('./internal/layout');
 const IdType = require('./idType');
 const Usage = require('./usage');
+const Terms = require('./internal/terms');
 const FodIdParseError = require('./fodIdParseError');
 
 /**
@@ -46,7 +47,15 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
    * the match key that type carries after the header (16 GUID bytes for
    * Random, 32 hash bytes for Probabilistic and HashedEmail).
    */
-  INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength'
+  INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength',
+  /**
+   * Bits 4 and 5 of the flags byte name a payload layout version this
+   * package does not know, so no field is read. A later version exists
+   * precisely because a field moved, so reading the payload under the
+   * layout this package knows would answer with values that are wrong
+   * rather than absent.
+   */
+  UNSUPPORTED_PAYLOAD_VERSION: 'UnsupportedPayloadVersion'
 }));
 
 /**
@@ -144,6 +153,8 @@ class FodId {
     this._licenseId = read.value._licenseId;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     this._matchKey = read.value._matchKey;
+    /** @type {number} the terms index, zero where the payload carries none */
+    this._termsIndex = read.value._termsIndex;
   }
 
   /**
@@ -333,6 +344,29 @@ class FodId {
     return this._matchKey.slice();
   }
 
+  /**
+   * The address of the terms document this 51Did was created under, read
+   * from the byte after the match key. The byte is an index into a table
+   * in the specification and this package turns the index into the
+   * address, so a caller never handles the byte. Nothing here fetches the
+   * address, because what to do with the document is the caller's
+   * decision.
+   *
+   * Null covers both an index of zero, which says the terms are not
+   * stated in the identifier, and an index added to the table after this
+   * package was released, which it cannot name. A caller cannot tell
+   * those two apart, which is deliberate, because both lead to the same
+   * place, being that the identifier does not say which terms it was
+   * created under and the answer has to come from somewhere else. No
+   * address is ever built from an index, since that would name a document
+   * nobody wrote.
+   * @returns {string|null} the address, or null where the identifier names
+   * no document this package knows, which is never an empty string
+   */
+  get terms () {
+    return Terms.url(Terms.fromIndex(this._termsIndex));
+  }
+
   /** @returns {number} the OWID version. */
   get version () {
     return this._owid.version;
@@ -421,14 +455,17 @@ class FodId {
  * Reads the 51Did fields out of an envelope payload, answering with a
  * status rather than throwing. This is the one walk of the payload, shared
  * by every surface that reads a 51Did. The type is read from the header and
- * decides the least the payload must hold after the header. Anything beyond
- * the match key is a creator context section whose lengths belong to the
- * cloud, so a longer payload is accepted whatever its length.
+ * decides the least the payload must hold after the header. The terms byte
+ * follows the match key, and anything beyond the terms byte is a creator
+ * context section whose lengths belong to the cloud, so a longer payload is
+ * accepted whatever its length.
  * @param {Uint8Array} payload the payload bytes
  * @returns {{status: string, flags?: number, licenseId?: number,
- * matchKey?: Uint8Array, length: number, required: number, type?: number}}
- * `status` PARSED with the fields, or a 51Did status with the length the
- * type needed
+ * matchKey?: Uint8Array, termsIndex?: number, length: number,
+ * required: number, type?: number, payloadVersion?: number}} `status`
+ * PARSED with the fields, or a 51Did status with the length the type
+ * needed, and the version found where that is what the payload was refused
+ * for
  */
 function unpack (payload) {
   const length = payload.length;
@@ -440,6 +477,20 @@ function unpack (payload) {
     };
   }
   const flags = payload[layout.FLAGS_OFFSET];
+  // The version is read before any field, because a later version exists
+  // precisely because a field moved. Reading a payload of a version this
+  // package does not know under the layout it does know would answer with
+  // values that are wrong rather than absent, which is worse than
+  // refusing, and a version that nothing checks protects nothing.
+  const payloadVersion = (flags >> 4) & 0b11;
+  if (payloadVersion !== layout.SUPPORTED_PAYLOAD_VERSION) {
+    return {
+      status: ParseStatus.UNSUPPORTED_PAYLOAD_VERSION,
+      length,
+      required: layout.HEADER_LENGTH,
+      payloadVersion
+    };
+  }
   // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
   // does not produce a negative number.
   const licenseId = (
@@ -468,6 +519,20 @@ function unpack (payload) {
       type
     };
   }
+  // The terms byte sits after the match key, so where it sits follows the
+  // match key length the type selects. A payload with no byte to read is a
+  // terms index of zero, which says the terms are not stated, so absence
+  // and zero are the same answer and neither has to be told from the
+  // other.
+  //
+  // A Reserved type cannot carry a terms byte this reader can find, because
+  // the match key length for that type is not defined and every byte after
+  // the header is therefore the match key. Such an identifier reads as a
+  // terms index of zero, which is correct and is not a missing case here.
+  const termsOffset = layout.MATCH_KEY_OFFSET + matchKeyLength;
+  const termsIndex = termsOffset + layout.TERMS_LENGTH <= length
+    ? payload[termsOffset]
+    : Terms.NOT_STATED;
   return {
     status: ParseStatus.PARSED,
     flags,
@@ -475,6 +540,7 @@ function unpack (payload) {
     // slice() copies, so the stored match key is this identifier's own.
     matchKey: payload.slice(
       layout.MATCH_KEY_OFFSET, layout.MATCH_KEY_OFFSET + matchKeyLength),
+    termsIndex,
     length,
     required
   };
@@ -505,6 +571,7 @@ function readEnvelope (read) {
   fodId._flags = unpacked.flags;
   fodId._licenseId = unpacked.licenseId;
   fodId._matchKey = unpacked.matchKey;
+  fodId._termsIndex = unpacked.termsIndex;
   return { ok: true, value: fodId, status: ParseStatus.PARSED };
 }
 
@@ -549,7 +616,7 @@ function valueOrThrow (read) {
 }
 
 /**
- * The exception for a failed read. The two 51Did payload statuses keep the
+ * The exception for a failed read. The three 51Did payload statuses keep the
  * RangeError this package has always thrown for them, and every OWID status
  * is a FodIdParseError carrying the status. Each error carries `status` so
  * the reason can be acted on without reading the message.
@@ -567,6 +634,10 @@ function errorFor (read) {
       `51Did payload for the ${IdType.name(read.detail.type)} type must be ` +
       `at least ${read.detail.required} bytes, and ${read.detail.length} ` +
       'were given.');
+  } else if (read.status === ParseStatus.UNSUPPORTED_PAYLOAD_VERSION) {
+    error = new RangeError(
+      `51Did payload version ${read.detail.payloadVersion} is not one this ` +
+      'package can read.');
   } else {
     return new FodIdParseError(read.status);
   }
