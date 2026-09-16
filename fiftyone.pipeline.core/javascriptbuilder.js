@@ -36,6 +36,16 @@ const ElementDataDictionary = require('./elementDataDictionary.js');
 const Constants = require('./constants.js');
 const uglifyJS = require('uglify-js');
 
+// Evidence names the rendered script is not configured with. The script
+// appends both to its own request itself, so naming them here as well would
+// send each twice and, worse, put the session id into the record the script
+// keeps of a request's inputs. That record decides whether a later page view
+// in the same tab can be served from the cached response, and a session id is
+// different on every page view, so a record holding one could never match.
+// The same two are excluded by the .NET builder, which is the reference for
+// this behaviour.
+const excludedParameters = ['session-id', 'sequence'];
+
 /**
  * @typedef {import('./flowData')} FlowData
  */
@@ -171,7 +181,16 @@ class JavaScriptBuilderElement extends FlowElement {
       }
 
       const urlQuery = querystring.stringify(query);
-      settings._parameters = JSON.stringify(query);
+
+      // The URL keeps every parameter, as it always has. The object the
+      // script is configured with leaves out the two it appends itself.
+      const scriptParameters = {};
+      for (const key in query) {
+        if (excludedParameters.indexOf(key) === -1) {
+          scriptParameters[key] = query[key];
+        }
+      }
+      settings._parameters = JSON.stringify(scriptParameters);
 
       // Does the URL already have a query string in it?
 

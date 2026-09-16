@@ -111,6 +111,52 @@ test('no javascriptProperties when sequence cap met', () => {
   expect(flowData2.jsonbundler.json.javascriptProperties.length).toBe(0);
 });
 
+// The script appends the session id and the sequence to its own request,
+// after taking the record of that request's inputs. That record decides
+// whether a later page view in the same tab can be served from the cached
+// response, and a session id is different on every page view, so one named
+// in the parameters would put a value in the record that can never match.
+// The cache would be thrown away and the snippets would run again on every
+// page.
+//
+// The parameters are only rendered when the builder has somewhere to send
+// its request, so this pipeline gives it one.
+const parameterPipeline = new core.PipelineBuilder({
+  javascriptBuilderSettings: {
+    host: 'localhost',
+    protocol: 'https',
+    endPoint: '/json'
+  }
+})
+  .add(testEngine)
+  .build();
+
+const flowData3 = parameterPipeline.createFlowData();
+
+flowData3.evidence.add('query.session-id', 'test-session');
+flowData3.evidence.add('query.sequence', 1);
+flowData3.evidence.add('query.mark', 'kept');
+
+test('the script parameters leave out the session id and the sequence',
+  (done) => {
+    flowData3.process().then(function () {
+      const script = flowData3.javascriptbuilder.javascript;
+      // The one line that assigns the parameters object. It is named
+      // differently across template versions, so it is found by the
+      // assignment rather than by the name.
+      const declaration = script.split(/\r?\n/)
+        .filter(line => /parameters = {/.test(line));
+
+      expect(declaration.length).toBe(1);
+      expect(declaration[0]).not.toContain('session-id');
+      expect(declaration[0]).not.toContain('sequence');
+      // Present, or this would pass with no parameters at all.
+      expect(declaration[0]).toContain('kept');
+
+      done();
+    });
+  });
+
 test('JSON bundler - Verify output where delayed execution = false', (done) => {
   const delayExecutionEngine1 = new core.FlowElement({
     dataKey: 'jsontestengine',
