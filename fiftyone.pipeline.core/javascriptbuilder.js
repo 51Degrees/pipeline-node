@@ -22,7 +22,6 @@
 
 const mustache = require('mustache');
 const fs = require('fs');
-const querystring = require('querystring');
 const path = require('path');
 
 const template = fs.readFileSync(
@@ -45,6 +44,22 @@ const uglifyJS = require('uglify-js');
 // The same two are excluded by the .NET builder, which is the reference for
 // this behaviour.
 const excludedParameters = ['session-id', 'sequence'];
+
+/**
+ * Encode a parameter name or value the way the .NET builder does with
+ * WebUtility.UrlEncode, which is the reference. The script joins the
+ * rendered parameters into its request body as they stand, so they must be
+ * encoded here. The differences from encodeURIComponent are that a space
+ * becomes a plus sign and that a tilde and an apostrophe are encoded too.
+ *
+ * @param {*} value the name or value to encode
+ * @returns {string} the encoded text
+ */
+const urlEncode = function (value) {
+  return encodeURIComponent(String(value))
+    .replace(/[~']/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+    .replace(/%20/g, '+');
+};
 
 /**
  * @typedef {import('./flowData')} FlowData
@@ -161,46 +176,40 @@ class JavaScriptBuilderElement extends FlowElement {
     settings._protocol = protocol;
 
     if (settings._host && settings._protocol && settings._endPoint) {
-      settings._url =
-        settings._protocol + '://' + settings._host + settings._endPoint;
+      // The URL is the protocol, the host and the endpoint and nothing
+      // else, as the .NET builder renders it. The values the page was
+      // requested with go in the request body as the parameters below, so
+      // none of them, the visitor's User-Agent and address included, are
+      // written into a URL that servers and proxies log. Exactly one slash
+      // separates the host from the endpoint.
+      let endPoint = settings._endPoint;
+      const hostHasSlash = settings._host.endsWith('/');
+      const endPointHasSlash = endPoint.startsWith('/');
+      if (hostHasSlash === false && endPointHasSlash === false) {
+        endPoint = '/' + endPoint;
+      } else if (hostHasSlash && endPointHasSlash) {
+        endPoint = endPoint.substring(1);
+      }
+      settings._url = settings._protocol + '://' + settings._host + endPoint;
 
-      // Get query parameters to add to the URL
-
-      const queryParams = this.evidenceKeyFilter.filterEvidence(
+      // The parameters are the query evidence, each named by everything
+      // after the first dot of its key so that a name such as id.usage is
+      // kept whole, and leaving out the two the script appends itself. The
+      // script joins them into its request body as they stand, so each name
+      // and value is encoded here.
+      const evidence = this.evidenceKeyFilter.filterEvidence(
         flowData.evidence.getAll()
       );
-
-      const query = {};
-
-      for (const param in queryParams) {
-        if (param.indexOf('query') !== -1) {
-          const paramKey = param.split('.')[1];
-
-          query[paramKey] = queryParams[param];
-        }
-      }
-
-      const urlQuery = querystring.stringify(query);
-
-      // The URL keeps every parameter, as it always has. The object the
-      // script is configured with leaves out the two it appends itself.
       const scriptParameters = {};
-      for (const key in query) {
-        if (excludedParameters.indexOf(key) === -1) {
-          scriptParameters[key] = query[key];
+      for (const key in evidence) {
+        if (key.startsWith('query.')) {
+          const name = key.substring('query.'.length);
+          if (excludedParameters.indexOf(name) === -1) {
+            scriptParameters[urlEncode(name)] = urlEncode(evidence[key]);
+          }
         }
       }
       settings._parameters = JSON.stringify(scriptParameters);
-
-      // Does the URL already have a query string in it?
-
-      if (settings._url.indexOf('?') === -1) {
-        settings._url += '?';
-      } else {
-        settings._url += '&';
-      }
-
-      settings._url += urlQuery;
 
       settings._updateEnabled = true;
     } else {
