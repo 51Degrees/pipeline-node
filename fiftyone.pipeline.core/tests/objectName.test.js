@@ -195,6 +195,14 @@ describe('JavaScript builder object name', () => {
     });
 
   test.each([
+    ['nothing at all', {}],
+    ['null', { objName: null }]
+  ])('a name of %s means the default name', async (description, settings) => {
+    const { script } = await render(settings, {});
+    expectWorkingObject(script, 'fod');
+  });
+
+  test.each([
     ['a separator', 'a;b'],
     ['a leading digit', '9bad'],
     ['a quote', 'x"y'],

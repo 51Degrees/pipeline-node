@@ -53,6 +53,11 @@ const excludedParameters = ['session-id', 'sequence'];
 // matching this pattern are used.
 const objectNamePattern = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
+// The name used where no name is configured, meaning the option is absent
+// or null. A configured name that is not valid, an empty one included, is
+// refused instead.
+const defaultObjectName = 'fod';
+
 // Words the pattern accepts that cannot be the name of the object. These are
 // the reserved words of the language, including those reserved only in
 // strict mode, plus the three global values a top level var cannot replace,
@@ -119,7 +124,7 @@ class JavaScriptBuilderElement extends FlowElement {
    * @param {string} options.objName the name of the client
    * side object with the JavaScript properties in it. This must be a valid
    * JavaScript identifier that is not a reserved word, or the constructor
-   * throws. This can be overridden with "query.fod-js-object-name" evidence,
+   * throws. Leaving it out, or giving null, means "fod". This can be overridden with "query.fod-js-object-name" evidence,
    * which is ignored with a warning when it is not a valid name.
    * @param {string} options.protocol The protocol ("http" or "https")
    * used by the client side callback url.
@@ -135,7 +140,7 @@ class JavaScriptBuilderElement extends FlowElement {
    * @param {boolean} options.minify Whether to minify the JavaScript
    */
   constructor ({
-    objName = 'fod',
+    objName = defaultObjectName,
     protocol = '',
     host = '',
     endPoint = '',
@@ -144,6 +149,10 @@ class JavaScriptBuilderElement extends FlowElement {
   } = {}) {
     super(...arguments);
 
+    // A name of null is no name at all, the same as leaving the option out.
+    if (objName === null) {
+      objName = defaultObjectName;
+    }
     if (!isValidObjectName(objName)) {
       throw new Error(
         'JavaScriptBuilder objName is invalid. It must be a valid ' +
