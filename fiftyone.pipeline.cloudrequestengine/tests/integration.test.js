@@ -106,3 +106,46 @@ test('post with sequence evidence', done => {
     done();
   });
 });
+
+/**
+ * Verify that a server using the engine gets a 51Did on its first call.
+ * The engine sends the end user's User-Agent as evidence and never as its
+ * own HTTP User-Agent header, so the cloud service does not treat the call
+ * as a browser page that still has snippets to run. The usage is sent as
+ * query.id.usage, whose name contains a dot and must reach the service
+ * whole. This is an integration test that uses the live cloud service. It
+ * is skipped when the resource key does not include the fodid product.
+ */
+test('51Did on the first call', async () => {
+  if (myResourceKey === '!!YOUR_RESOURCE_KEY!!') {
+    fail('You need to supply a resource key in the ' +
+        '_51DEGREES_RESOURCE_KEY environment variable.');
+  }
+  const cloud = new CloudRequestEngine({ resourceKey: myResourceKey });
+  const pipeline = new PipelineBuilder()
+    .add(cloud)
+    .build();
+  await cloud.ready();
+  // The product name keeps the case the service gives it, such as FODid.
+  const fodidProduct = Object.entries(cloud.flowElementProperties)
+    .find(([name]) => name.toLowerCase() === 'fodid');
+  if (!fodidProduct || !fodidProduct[1].idprobglobal) {
+    console.warn('The resource key does not include ' +
+      'fodid.idprobglobal, so the 51Did check was skipped.');
+    return;
+  }
+
+  const data = pipeline.createFlowData();
+  data.evidence.add('header.user-agent', 'Mozilla/5.0 (Windows NT 10.0; ' +
+    'Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+    'Chrome/120.0.0.0 Safari/537.36');
+  data.evidence.add('server.client-ip', '81.2.69.142');
+  data.evidence.add('query.id.usage', 'standard');
+  await data.process();
+
+  const fodid = JSON.parse(data.cloud.cloud).fodid;
+  expect(fodid).toBeDefined();
+  expect(fodid.idprobglobalnullreason).toBeUndefined();
+  expect(typeof fodid.idprobglobal).toBe('string');
+  expect(fodid.idprobglobal.length).toBeGreaterThan(0);
+});

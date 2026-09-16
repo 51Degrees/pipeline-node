@@ -422,10 +422,16 @@ class CloudRequestEngine extends Engine {
    */
   addQueryData (flowData, queryData, allEvidence, evidence) {
     for (const [evidenceKey, evidenceValue] of Object.entries(evidence)) {
-      // Get the key parts
-      const evidenceKeyParts = evidenceKey.split('.');
-      const prefix = evidenceKeyParts[0];
-      const suffix = evidenceKeyParts[1];
+      // Split the key at its first dot only. The prefix is the part before
+      // it and the name sent to the cloud is everything after it, so a name
+      // that itself contains a dot, such as id.usage, is sent whole.
+      const separatorIndex = evidenceKey.indexOf('.');
+      const prefix = separatorIndex >= 0
+        ? evidenceKey.substring(0, separatorIndex)
+        : evidenceKey;
+      const suffix = separatorIndex >= 0
+        ? evidenceKey.substring(separatorIndex + 1)
+        : evidenceKey;
 
       // Check and add the evidence to the query parameters.
       if ((suffix in queryData) === false) {
