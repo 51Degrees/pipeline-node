@@ -56,7 +56,9 @@ const objectNamePattern = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 // Words the pattern accepts that cannot be the name of the object. These are
 // the reserved words of the language, including those reserved only in
 // strict mode, plus the three global values a top level var cannot replace,
-// where the object would silently never be created.
+// where the object would silently never be created. The last entry is the
+// constructor the script itself defines and calls to create the object, so
+// that name would clash with it.
 const reservedObjectNames = [
   'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
   'debugger', 'default', 'delete', 'do', 'else', 'enum', 'export',
@@ -64,7 +66,8 @@ const reservedObjectNames = [
   'import', 'in', 'instanceof', 'interface', 'let', 'new', 'null',
   'package', 'private', 'protected', 'public', 'return', 'static', 'super',
   'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void',
-  'while', 'with', 'yield', 'Infinity', 'NaN', 'undefined'
+  'while', 'with', 'yield', 'Infinity', 'NaN', 'undefined',
+  'fiftyoneDegreesManager'
 ];
 
 /**

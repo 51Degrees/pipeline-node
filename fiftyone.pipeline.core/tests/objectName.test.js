@@ -167,7 +167,9 @@ describe('JavaScript builder object name', () => {
     ['a leading digit', '9bad', ['9bad']],
     ['a quote', 'x"y', ['x"y', 'x&quot;y', 'var x&', 'var x"']],
     ['nothing', '', ['var  =']],
-    ['a reserved word', 'class', ['var class']]
+    ['a reserved word', 'class', ['var class']],
+    ['the script\'s constructor name', 'fiftyoneDegreesManager',
+      ['var fiftyoneDegreesManager']]
   ])('a name in evidence with %s is ignored with a warning',
     async (description, name, absent) => {
       const { script, warnings } = await render({}, {
@@ -198,6 +200,7 @@ describe('JavaScript builder object name', () => {
     ['a quote', 'x"y'],
     ['nothing', ''],
     ['a reserved word', 'var'],
+    ['the script\'s constructor name', 'fiftyoneDegreesManager'],
     ['a value that is not a string', 5]
   ])('a configured name with %s is refused', (description, name) => {
     expect(() => new core.JavascriptBuilder({ objName: name }))
