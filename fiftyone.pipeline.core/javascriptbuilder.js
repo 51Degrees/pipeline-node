@@ -46,6 +46,40 @@ const uglifyJS = require('uglify-js');
 // this behaviour.
 const excludedParameters = ['session-id', 'sequence'];
 
+// The object name is written into the script as the name of a global
+// variable, as a session storage key and inside string literals, with no
+// escaping of JavaScript. A name that is not a plain JavaScript identifier
+// would therefore break the script or change what it does, so only names
+// matching this pattern are used.
+const objectNamePattern = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+// Words the pattern accepts that cannot be the name of the object. These are
+// the reserved words of the language, including those reserved only in
+// strict mode, plus the three global values a top level var cannot replace,
+// where the object would silently never be created.
+const reservedObjectNames = [
+  'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
+  'debugger', 'default', 'delete', 'do', 'else', 'enum', 'export',
+  'extends', 'false', 'finally', 'for', 'function', 'if', 'implements',
+  'import', 'in', 'instanceof', 'interface', 'let', 'new', 'null',
+  'package', 'private', 'protected', 'public', 'return', 'static', 'super',
+  'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void',
+  'while', 'with', 'yield', 'Infinity', 'NaN', 'undefined'
+];
+
+/**
+ * Whether a name can be used as the name of the client side object.
+ *
+ * @param {*} name the requested name
+ * @returns {boolean} true if the name is a valid JavaScript identifier and
+ * not a reserved word
+ */
+function isValidObjectName (name) {
+  return typeof name === 'string' &&
+    objectNamePattern.test(name) &&
+    reservedObjectNames.indexOf(name) === -1;
+}
+
 /**
  * @typedef {import('./flowData')} FlowData
  */
@@ -80,7 +114,10 @@ class JavaScriptBuilderElement extends FlowElement {
    *
    * @param {object} options options object
    * @param {string} options.objName the name of the client
-   * side object with the JavaScript properties in it
+   * side object with the JavaScript properties in it. This must be a valid
+   * JavaScript identifier that is not a reserved word, or the constructor
+   * throws. This can be overridden with "query.fod-js-object-name" evidence,
+   * which is ignored with a warning when it is not a valid name.
    * @param {string} options.protocol The protocol ("http" or "https")
    * used by the client side callback url.
    * This can be overriden with header.protocol evidence
@@ -103,6 +140,12 @@ class JavaScriptBuilderElement extends FlowElement {
     minify = false
   } = {}) {
     super(...arguments);
+
+    if (!isValidObjectName(objName)) {
+      throw new Error(
+        'JavaScriptBuilder objName is invalid. It must be a valid ' +
+        'JavaScript identifier that is not a reserved word.');
+    }
 
     this.settings = {
       objName,
@@ -231,10 +274,18 @@ class JavaScriptBuilderElement extends FlowElement {
     if (enableCookies !== undefined) {
       settings._enableCookies = (enableCookies?.toLowerCase?.() === 'true');
     }
-    // Try and get the requested object name from evidence.
+    // Try and get the requested object name from evidence. A name that is
+    // not a valid identifier is ignored and the configured name is used.
     const objName = flowData.evidence.get(Constants.evidenceObjectName);
     if (objName !== undefined) {
-      settings._objName = (objName);
+      if (isValidObjectName(objName)) {
+        settings._objName = objName;
+      } else {
+        this._log('warn',
+          'The requested JavaScript object name is not a valid JavaScript ' +
+          'identifier, so the configured name "' + this.settings.objName +
+          '" was used instead.');
+      }
     }
 
     let output = mustache.render(template, settings);
