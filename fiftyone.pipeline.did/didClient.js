@@ -132,6 +132,8 @@ const FactorResult = Object.freeze({
  * mismatch beside a verified name reads as an upgrade, and a mismatched
  * name reads as a different operating system or browser. These four
  * replaced the single `browser` factor from cloud release 4.4.38.
+ * {@link RedeemResult#factors} is not limited to these names, so a factor
+ * the cloud adds later still reaches the caller.
  */
 const Factor = Object.freeze({
   TRANSPORT: 'transport',
@@ -144,8 +146,6 @@ const Factor = Object.freeze({
   BROWSER_NAME: 'browsername',
   BROWSER_VERSION: 'browserversion'
 });
-
-const FACTOR_NAMES = Object.freeze(Object.values(Factor));
 
 /**
  * The reason a {@link DidClient#verifySignatureDetailed} answer was given.
@@ -259,12 +259,14 @@ class RedeemResult {
      * {@link FactorResult} value (or null where nothing was compared),
      * present only when the cloud sent `factors`, which it does where there
      * is something to diagnose, being a mismatch or a misconfigured result
-     * that still compared some factors. Only the names in {@link Factor}
-     * are carried, in that order, so a name this package does not know,
-     * such as the `browser` factor the four platform and browser factors
-     * replaced, is not read into it. `raw` still holds the body as sent.
+     * that still compared some factors. Every name is kept exactly as the
+     * cloud sent it, including one this package does not list in
+     * {@link Factor}, so a factor the cloud adds later reaches the caller
+     * without a new release of this package.
      */
-    this.factors = readFactors(parsed.factors);
+    this.factors = parsed.factors && typeof parsed.factors === 'object'
+      ? Object.freeze(Object.assign({}, parsed.factors))
+      : undefined;
     const verifiedAt = typeof parsed.verifiedAt === 'string'
       ? new Date(parsed.verifiedAt)
       : null;
@@ -326,26 +328,6 @@ class RedeemResult {
     }
     return body;
   }
-}
-
-/**
- * Reads the factors the cloud reported, keeping only the names in
- * {@link Factor} and in that order.
- * @param {*} factors the `factors` value of a parsed body
- * @returns {object | undefined} a frozen object, or undefined where the
- * body carried no factors object
- */
-function readFactors (factors) {
-  if (!factors || typeof factors !== 'object' || Array.isArray(factors)) {
-    return undefined;
-  }
-  const read = {};
-  for (const name of FACTOR_NAMES) {
-    if (Object.prototype.hasOwnProperty.call(factors, name)) {
-      read[name] = factors[name];
-    }
-  }
-  return Object.freeze(read);
 }
 
 /**

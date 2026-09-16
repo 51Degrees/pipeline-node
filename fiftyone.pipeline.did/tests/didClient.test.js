@@ -767,7 +767,7 @@ describe('DidClient redeem', () => {
       };
       const { client } = redeemClient(200, body);
       const result = await client.redeem(fod, RESULT, CHALLENGE);
-      expect(Object.keys(result.factors)).toEqual(Object.values(Factor));
+      expect(result.factors).toEqual(body.factors);
       expect(result.factors[Factor.PLATFORM_NAME])
         .toBe(FactorResult.VERIFIED);
       expect(result.factors[Factor.PLATFORM_VERSION])
@@ -780,37 +780,55 @@ describe('DidClient redeem', () => {
 
   test('the factor names are the nine the cloud lists, in its order', () => {
     expect(Object.isFrozen(Factor)).toBe(true);
+    expect(Object.keys(Factor)).toEqual([
+      'TRANSPORT', 'DEVICE', 'BROWSER_IP', 'CONNECTION_IP', 'ASN',
+      'PLATFORM_NAME', 'PLATFORM_VERSION', 'BROWSER_NAME', 'BROWSER_VERSION'
+    ]);
     expect(Object.values(Factor)).toEqual([
       'transport', 'device', 'browserip', 'connectionip', 'asn',
       'platformname', 'platformversion', 'browsername', 'browserversion'
     ]);
   });
 
-  test('an old browser factor populates none of the four', async () => {
-    const body = {
-      signature: 'verified',
-      context: 'mismatch',
-      factors: {
-        transport: 'verified',
-        device: 'verified',
-        browserip: 'verified',
-        connectionip: 'verified',
-        asn: 'verified',
-        browser: 'mismatch'
+  test('an old browser factor populates none of the four, and is kept',
+    async () => {
+      const body = {
+        signature: 'verified',
+        context: 'mismatch',
+        factors: {
+          transport: 'verified',
+          device: 'verified',
+          browserip: 'verified',
+          connectionip: 'verified',
+          asn: 'verified',
+          browser: 'mismatch'
+        }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(result.factors).toBeDefined();
+      for (const name of [Factor.PLATFORM_NAME, Factor.PLATFORM_VERSION,
+        Factor.BROWSER_NAME, Factor.BROWSER_VERSION]) {
+        expect(name in result.factors).toBe(false);
       }
-    };
-    const { client } = redeemClient(200, body);
-    const result = await client.redeem(fod, RESULT, CHALLENGE);
-    expect(result.factors).toBeDefined();
-    for (const name of [Factor.PLATFORM_NAME, Factor.PLATFORM_VERSION,
-      Factor.BROWSER_NAME, Factor.BROWSER_VERSION]) {
-      expect(result.factors[name]).toBeUndefined();
-    }
-    expect('browser' in result.factors).toBe(false);
-    expect(result.factors[Factor.TRANSPORT]).toBe(FactorResult.VERIFIED);
-    // The body as sent still carries it, for a caller who needs to see it.
-    expect(JSON.parse(result.raw).factors.browser).toBe('mismatch');
-  });
+      // Every name passes through as the cloud sent it, as in every other
+      // 51Did package.
+      expect(result.factors.browser).toBe('mismatch');
+      expect(result.factors).toEqual(body.factors);
+      expect(result.toJSON().factors).toEqual(body.factors);
+    });
+
+  test('a factor name this package does not list is passed through',
+    async () => {
+      const body = {
+        context: 'mismatch',
+        factors: { transport: 'verified', laterfactor: 'mismatch' }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(result.factors).toEqual(body.factors);
+      expect(Object.isFrozen(result.factors)).toBe(true);
+    });
 
   test('redeemed without factors (verified)', async () => {
     const body = {

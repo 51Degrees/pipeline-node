@@ -309,10 +309,10 @@ export class RedeemResult {
      * {@link FactorResult} value (or null where nothing was compared),
      * present only when the cloud sent `factors`, which it does where there
      * is something to diagnose, being a mismatch or a misconfigured result
-     * that still compared some factors. Only the names in {@link Factor}
-     * are carried, in that order, so a name this package does not know,
-     * such as the `browser` factor the four platform and browser factors
-     * replaced, is not read into it. `raw` still holds the body as sent.
+     * that still compared some factors. Every name is kept exactly as the
+     * cloud sent it, including one this package does not list in
+     * {@link Factor}, so a factor the cloud adds later reaches the caller
+     * without a new release of this package.
      */
     factors: object | undefined;
     /**
@@ -406,6 +406,8 @@ export const FactorResult: Readonly<{
  * mismatch beside a verified name reads as an upgrade, and a mismatched
  * name reads as a different operating system or browser. These four
  * replaced the single `browser` factor from cloud release 4.4.38.
+ * {@link RedeemResult#factors} is not limited to these names, so a factor
+ * the cloud adds later still reaches the caller.
  */
 export const Factor: Readonly<{
     TRANSPORT: "transport";

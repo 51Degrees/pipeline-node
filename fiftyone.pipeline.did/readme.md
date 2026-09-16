@@ -497,10 +497,12 @@ The factor names are in `Factor`, in the order the cloud lists them. From
 cloud release 4.4.38 the operating system and the browser each have a name
 and a version, replacing the single `browser` factor, so a version mismatch
 beside a verified name reads as an upgrade and a mismatched name reads as a
-different operating system or browser. `factors` carries only the names in
-`Factor`, so the old `browser` key is not read into it. A factor that is
-`misconfigured` was not checked by the service, and must never be read as a
-mismatch.
+different operating system or browser. `factors` keeps every name exactly as
+the cloud sent it, including a name that is not in `Factor`, so a factor the
+cloud adds later reaches the caller without a new release of this package,
+and an older service's `browser` key stays under its own name rather than
+filling any of the four. A factor that is `misconfigured` was not checked by
+the service, and must never be read as a mismatch.
 
 A context string this package does not know maps to `unreadable`, so an
 unrecognised outcome is never mistaken for a good one, and `contextRaw` keeps
