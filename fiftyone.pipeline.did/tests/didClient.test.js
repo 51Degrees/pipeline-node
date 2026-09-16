@@ -26,6 +26,8 @@ const {
   RedeemResult,
   ContextResult,
   SignatureResult,
+  FactorResult,
+  Factor,
   SignatureReason,
   DidClientError,
   DidArgumentError,
@@ -430,7 +432,7 @@ describe('DidClient verifySignature', () => {
     // A Reserved type parses at any length from the header up, so it is
     // the way to present a payload the cloud's length rule refuses.
     const short = new Uint8Array(20);
-    short[layout.FLAGS_OFFSET] = 0b11000000;
+    short[layout.FLAGS_OFFSET] = 0b11000001;
     const fod = await signedAt(pairs[1], new Date(START_2.getTime() + DAY), { payload: short });
     await expect(client.verifySignatureDetailed(fod)).resolves.toEqual({
       valid: false, reason: SignatureReason.LENGTH
@@ -723,7 +725,10 @@ describe('DidClient redeem', () => {
         browserip: 'verified',
         connectionip: 'mismatch',
         asn: 'verified',
-        browser: null
+        platformname: 'verified',
+        platformversion: 'mismatch',
+        browsername: 'verified',
+        browserversion: null
       },
       verifiedAt: '2026-08-07T09:15:32Z',
       secondsSinceVerified: 2
@@ -741,6 +746,70 @@ describe('DidClient redeem', () => {
     expect(result.secondsSinceVerified).toBe(2);
     expect(result.raw).toBe(JSON.stringify(body));
     expect(result.toJSON()).toEqual(body);
+  });
+
+  test('the four platform and browser factors are read into their names',
+    async () => {
+      const body = {
+        signature: 'verified',
+        context: 'mismatch',
+        factors: {
+          transport: 'verified',
+          device: 'verified',
+          browserip: 'verified',
+          connectionip: 'verified',
+          asn: 'verified',
+          platformname: 'verified',
+          platformversion: 'mismatch',
+          browsername: 'mismatch',
+          browserversion: 'misconfigured'
+        }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(Object.keys(result.factors)).toEqual(Object.values(Factor));
+      expect(result.factors[Factor.PLATFORM_NAME])
+        .toBe(FactorResult.VERIFIED);
+      expect(result.factors[Factor.PLATFORM_VERSION])
+        .toBe(FactorResult.MISMATCH);
+      expect(result.factors[Factor.BROWSER_NAME])
+        .toBe(FactorResult.MISMATCH);
+      expect(result.factors[Factor.BROWSER_VERSION])
+        .toBe(FactorResult.MISCONFIGURED);
+    });
+
+  test('the factor names are the nine the cloud lists, in its order', () => {
+    expect(Object.isFrozen(Factor)).toBe(true);
+    expect(Object.values(Factor)).toEqual([
+      'transport', 'device', 'browserip', 'connectionip', 'asn',
+      'platformname', 'platformversion', 'browsername', 'browserversion'
+    ]);
+  });
+
+  test('an old browser factor populates none of the four', async () => {
+    const body = {
+      signature: 'verified',
+      context: 'mismatch',
+      factors: {
+        transport: 'verified',
+        device: 'verified',
+        browserip: 'verified',
+        connectionip: 'verified',
+        asn: 'verified',
+        browser: 'mismatch'
+      }
+    };
+    const { client } = redeemClient(200, body);
+    const result = await client.redeem(fod, RESULT, CHALLENGE);
+    expect(result.factors).toBeDefined();
+    for (const name of [Factor.PLATFORM_NAME, Factor.PLATFORM_VERSION,
+      Factor.BROWSER_NAME, Factor.BROWSER_VERSION]) {
+      expect(result.factors[name]).toBeUndefined();
+    }
+    expect('browser' in result.factors).toBe(false);
+    expect(result.factors[Factor.TRANSPORT]).toBe(FactorResult.VERIFIED);
+    // The body as sent still carries it, for a caller who needs to see it.
+    expect(JSON.parse(result.raw).factors.browser).toBe('mismatch');
   });
 
   test('redeemed without factors (verified)', async () => {

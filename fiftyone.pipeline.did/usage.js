@@ -42,15 +42,9 @@
  * https://github.com/51Degrees/specifications/blob/main/did-specification/identifier-layout.md
  * which is the authority rather than this comment.
  */
-const NAMES = ['None', 'NonMarketing', 'Standard', 'Personalized'];
+const NAMES = [null, 'NonMarketing', 'Standard', 'Personalized'];
 const ID_USAGE = [null, 'non-marketing', 'standard', 'personalized'];
 const Usage = Object.freeze({
-  /**
-   * No usage bit is set. The cloud never issues such an identifier, so
-   * this is an identifier from somewhere else or a damaged one, and it
-   * should be treated as though it may not be passed on.
-   */
-  NONE: 0,
   /** Created for use that is not marketing. Must not be passed to a demand source. */
   NON_MARKETING: 1,
   /** Created for standard marketing, being targeting unrelated to browsing history. */
@@ -59,31 +53,38 @@ const Usage = Object.freeze({
   PERSONALIZED: 3,
   /**
    * Decodes the usage from bits 0-2 of a flags byte, as the highest usage
-   * granted.
+   * granted. There is no Usage for bits 000, because the cloud never
+   * writes a flags byte without bit 0, so a payload carrying 000 is
+   * damaged or forged and FodId refuses it with
+   * `FodId.ParseStatus.NO_USAGE` before this is asked.
    * @param {number} flags the 1-byte flags value (0-255)
    * @returns {number} the Usage value
+   * @throws {RangeError} when bits 0-2 are all clear
    */
   fromFlags (flags) {
     if (flags & 0b100) return 3;
     if (flags & 0b010) return 2;
     if (flags & 0b001) return 1;
-    return 0;
+    throw new RangeError(
+      'Usage bits 000 are not a usage, so the flags byte cannot be read.');
   },
   /**
    * The cross language name of a Usage value.
-   * @param {number} usage a Usage value, 0 to 3
-   * @returns {string} for example "NonMarketing"
+   * @param {number} usage a Usage value, 1 to 3
+   * @returns {string|null} for example "NonMarketing", or null for a value
+   * that is not a Usage
    */
   name (usage) {
-    return NAMES[usage];
+    return NAMES[usage] || null;
   },
   /**
-   * The cloud's id.usage value for a Usage value, or null for NONE.
-   * @param {number} usage a Usage value, 0 to 3
-   * @returns {string|null} for example "non-marketing"
+   * The cloud's id.usage value for a Usage value.
+   * @param {number} usage a Usage value, 1 to 3
+   * @returns {string|null} for example "non-marketing", or null for a value
+   * that is not a Usage
    */
   idUsage (usage) {
-    return ID_USAGE[usage];
+    return ID_USAGE[usage] || null;
   }
 });
 module.exports = Usage;

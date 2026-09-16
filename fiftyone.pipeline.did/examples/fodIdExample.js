@@ -113,7 +113,7 @@ async function run () {
   console.log('  Domain    :', fodId.domain);
   console.log('  Type      :', IdType.name(fodId.type));
   console.log('  Usage     :', Usage.name(fodId.usage));
-  console.log('  From cons.:', fodId.usageFromConsent);
+  console.log('  Indirect  :', fodId.usageIsIndirect);
   console.log('  LicenseId :', fodId.licenseId);
   console.log('  Match key :', Buffer.from(fodId.matchKey).toString('hex'));
   console.log('  Terms     :', fodId.terms);

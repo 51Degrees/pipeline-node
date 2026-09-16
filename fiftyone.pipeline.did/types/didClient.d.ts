@@ -305,10 +305,14 @@ export class RedeemResult {
     /** @type {string} one of {@link SignatureResult} */
     signature: string;
     /**
-     * @type {object | undefined} factor name to {@link FactorResult} value
-     * (or null where nothing was compared), present only when the cloud
-     * sent `factors`, which is the mismatch outcome. The names are
-     * transport, device, browserip, connectionip, asn and browser.
+     * @type {object | undefined} {@link Factor} name to
+     * {@link FactorResult} value (or null where nothing was compared),
+     * present only when the cloud sent `factors`, which it does where there
+     * is something to diagnose, being a mismatch or a misconfigured result
+     * that still compared some factors. Only the names in {@link Factor}
+     * are carried, in that order, so a name this package does not know,
+     * such as the `browser` factor the four platform and browser factors
+     * replaced, is not read into it. `raw` still holds the body as sent.
      */
     factors: object | undefined;
     /**
@@ -394,6 +398,25 @@ export const FactorResult: Readonly<{
      * NOT a mismatch and must not be read as one.
      */
     MISCONFIGURED: "misconfigured";
+}>;
+/**
+ * The names of the creator context factors, as the cloud writes them as
+ * keys of `factors`, in the order the cloud lists them. The operating
+ * system and the browser each have a name and a version, so a version
+ * mismatch beside a verified name reads as an upgrade, and a mismatched
+ * name reads as a different operating system or browser. These four
+ * replaced the single `browser` factor from cloud release 4.4.38.
+ */
+export const Factor: Readonly<{
+    TRANSPORT: "transport";
+    DEVICE: "device";
+    BROWSER_IP: "browserip";
+    CONNECTION_IP: "connectionip";
+    ASN: "asn";
+    PLATFORM_NAME: "platformname";
+    PLATFORM_VERSION: "platformversion";
+    BROWSER_NAME: "browsername";
+    BROWSER_VERSION: "browserversion";
 }>;
 /**
  * The reason a {@link DidClient#verifySignatureDetailed} answer was given.

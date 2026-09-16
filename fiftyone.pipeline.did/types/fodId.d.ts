@@ -46,7 +46,8 @@ export = FodId;
 declare class FodId {
     /**
      * Why a read succeeded or failed, being the OWID library's statuses plus
-     * `PAYLOAD_TOO_SHORT` and `INVALID_TYPE_PAYLOAD_LENGTH`. Frozen.
+     * `PAYLOAD_TOO_SHORT`, `INVALID_TYPE_PAYLOAD_LENGTH`,
+     * `UNSUPPORTED_PAYLOAD_VERSION` and `NO_USAGE`. Frozen.
      * @type {Readonly<Record<string, string>>}
      */
     static ParseStatus: Readonly<Record<string, string>>;
@@ -183,13 +184,16 @@ declare class FodId {
      */
     get usage(): number;
     /**
-     * Whether the usage was derived from an IAB consent string the caller
-     * sent, rather than stated by the caller directly. Bit 3 of the flags.
-     * Both are legitimate ways to arrive at a usage, and this says nothing
-     * about which usage it is.
+     * Whether the usage is indirect, being worked out by the issuer from a
+     * signal other than the caller stating it. Bit 3 of the flags. False
+     * means the caller stated the usage directly. A consent string is the
+     * only indirect signal today, so today this is true only where the usage
+     * was derived from one, but a later signal of another kind sets the same
+     * bit. Both are legitimate ways to arrive at a usage, and this says
+     * nothing about which usage it is.
      * @returns {boolean}
      */
-    get usageFromConsent(): boolean;
+    get usageIsIndirect(): boolean;
     /**
      * The 4-byte little-endian field at offset 1 of the payload, as an
      * unsigned integer (0-4294967295).
