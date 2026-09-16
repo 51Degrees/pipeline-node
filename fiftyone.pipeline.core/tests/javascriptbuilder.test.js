@@ -141,11 +141,14 @@ test('the script parameters leave out the session id and the sequence',
   (done) => {
     flowData3.process().then(function () {
       const script = flowData3.javascriptbuilder.javascript;
-      // The one line that assigns the parameters object. It is named
-      // differently across template versions, so it is found by the
-      // assignment rather than by the name.
+      // The one line that assigns the parameters object. The template has
+      // called it both "parameters" and "renderedParameters", so naming
+      // either would make this pass or fail on which revision of the
+      // template is embedded rather than on anything the builder does. The
+      // line that assigns it mentions parameters and has a brace; the line
+      // that merely calls it has no brace.
       const declaration = script.split(/\r?\n/)
-        .filter(line => /parameters = {/.test(line));
+        .filter(line => /parameters\s*=/i.test(line) && line.includes('{'));
 
       expect(declaration.length).toBe(1);
       expect(declaration[0]).not.toContain('session-id');
