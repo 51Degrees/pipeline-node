@@ -321,7 +321,7 @@ npm test
 ## Usage
 
 ```js
-const { FodId, IdType, Usage, Terms } = require('fiftyone.pipeline.did');
+const { FodId, IdType, Usage } = require('fiftyone.pipeline.did');
 
 // Either base64 alphabet is accepted, the standard one the cloud issues and
 // the URL-safe one a page puts in a link, with or without padding.
