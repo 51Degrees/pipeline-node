@@ -517,10 +517,16 @@ runs against the code beside it.
 `examples/creator-context-web/` holds a small demo web app, `server.js`
 serving `page.html`, that runs the full 51Did flow the way production does.
 
-1. **Create.** The browser calls the `json` endpoint, which issues a 51Did
-   for the browser's connection.
+1. **Create.** The browser loads the 51Degrees client script, which runs the
+   snippets the service asks for, sends what they collected, and hands the
+   page the answer with the 51Did in it, created for the browser's own
+   connection. The service issues an identifier only once those values are
+   in, so a page asking for one by itself is told the page has not finished
+   and is given nothing.
 2. **Verify.** The browser calls `verify-full`, the first verification step,
-   so the cloud observes the browser's live connection. Both the signature
+   so the cloud observes the browser's live connection, and sends what the
+   snippets collected with the call so that this browser can be compared
+   with the creator. Both the signature
    outcome and the creator context verdict return only as an encrypted
    `result` that the browser cannot read or forge. (A deployment holding no
    context secret answers in the open instead.) The page then hands the
