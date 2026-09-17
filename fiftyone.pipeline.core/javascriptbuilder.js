@@ -88,6 +88,55 @@ function isValidObjectName (name) {
     reservedObjectNames.indexOf(name) === -1;
 }
 
+// The session id is written into the script inside double quotes with no
+// escaping, so only a value of 1 to 64 ASCII letters, digits and hyphens is
+// written. Any other value could break the script or change what it does.
+// The id the Sequence Element creates always matches.
+const sessionIdPattern = /^[A-Za-z0-9-]{1,64}$/;
+
+// A sequence given as text is only read when it is made of digits, and one
+// of more than ten digits cannot be a 32 bit integer.
+const sequencePattern = /^[0-9]{1,10}$/;
+
+const maxSequence = 2147483647;
+
+/**
+ * The session id to write into the script, which is the value given when it
+ * is safe to write and an empty string otherwise.
+ *
+ * @param {*} value the session id evidence
+ * @returns {string} the session id, or an empty string
+ */
+function safeSessionId (value) {
+  return typeof value === 'string' && sessionIdPattern.test(value)
+    ? value
+    : '';
+}
+
+/**
+ * The sequence to write into the script, which is the value given when it is
+ * a positive 32 bit integer and 1 otherwise, including where there is no
+ * Sequence Element. The value is written as code, so text that is not a
+ * number could break the script, and a number below 1 is not a sequence the
+ * Sequence Element would ever give.
+ *
+ * @param {*} value the sequence evidence
+ * @returns {number} the sequence, which is always at least 1
+ */
+function safeSequence (value) {
+  let sequence = 0;
+  if (typeof value === 'number') {
+    sequence = value;
+  } else if (typeof value === 'string' && sequencePattern.test(value)) {
+    sequence = Number(value);
+  }
+  return Number.isInteger(sequence) &&
+    sequence >= 1 &&
+    sequence <= maxSequence
+    ? sequence
+    : 1;
+}
+
 /**
  * @typedef {import('./flowData')} FlowData
  */
@@ -278,8 +327,10 @@ class JavaScriptBuilderElement extends FlowElement {
 
     settings._hasDelayedProperties = settings._jsonObject.includes('delayexecution');
 
-    settings._sessionId = flowData.evidence.get('query.session-id');
-    settings._sequence = flowData.evidence.get('query.sequence');
+    settings._sessionId =
+      safeSessionId(flowData.evidence.get('query.session-id'));
+    settings._sequence =
+      safeSequence(flowData.evidence.get('query.sequence'));
 
     // Try and get the requested enable cookies from evidence.
     const enableCookies = flowData.evidence.get(Constants.evidenceEnableCookies);
