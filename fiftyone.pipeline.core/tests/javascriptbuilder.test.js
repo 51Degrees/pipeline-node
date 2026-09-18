@@ -306,3 +306,117 @@ test('JavaScriptBuilder - Verify minify default setting', (done) => {
 
   done();
 });
+
+// The builders for every language render the same script, and the .NET
+// builder is the reference. These tests pin the parts of the script that
+// depend on the request, being the callback URL and the parameters object.
+
+// Renders the script for the given evidence and builder settings.
+const renderScript = async (settings, evidence) => {
+  const renderPipeline = new core.PipelineBuilder({
+    javascriptBuilderSettings: settings
+  })
+    .add(testEngine)
+    .build();
+  const renderData = renderPipeline.createFlowData();
+  for (const [key, value] of Object.entries(evidence)) {
+    renderData.evidence.add(key, value);
+  }
+  await renderData.process();
+  return renderData.javascriptbuilder.javascript;
+};
+
+// The URLs the script sends its request to. The template writes the URL
+// into a fetch call or an XMLHttpRequest, depending on the browser.
+const requestUrls = (script) => {
+  const urls = [];
+  const pattern = /(?:fetch\(|createCORSRequest\('POST',\s*)'([^']*)'/g;
+  let match;
+  while ((match = pattern.exec(script)) !== null) {
+    urls.push(match[1]);
+  }
+  return urls;
+};
+
+// The object literal the rendered parameters function returns.
+const renderedParameters = (script) => {
+  const line = script.split(/\r?\n/)
+    .find(l => /parameters\s*=/i.test(l) && l.includes('{'));
+  const match = /return\s+(\{.*\});\s*\};/.exec(line);
+  return JSON.parse(match[1]);
+};
+
+const requestEvidence = {
+  'header.host': 'localhost',
+  'header.protocol': 'https',
+  'query.user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  'query.client-ip': '192.0.2.1',
+  'query.session-id': 'test-session',
+  'query.sequence': 1
+};
+
+// The request goes to the endpoint alone. The values the page was requested
+// with travel in the request body, so none of them, and in particular not
+// the visitor's User-Agent or address, are written into the URL.
+test('the request URL is the protocol, host and endpoint only', async () => {
+  const script = await renderScript({ endPoint: '/json' }, requestEvidence);
+  const urls = requestUrls(script);
+  expect(urls.length).toBeGreaterThan(0);
+  for (const url of urls) {
+    expect(url).toBe('https://localhost/json');
+  }
+});
+
+// One slash between the host and the endpoint, whichever of them carries it.
+test.each([
+  ['no slash on either', 'localhost', 'json'],
+  ['slash on the host', 'localhost/', 'json'],
+  ['slash on both', 'localhost/', '/json'],
+  ['slash on the endpoint', 'localhost', '/json']
+])('the request URL has one slash - %s', async (name, host, endPoint) => {
+  const script = await renderScript(
+    { host, protocol: 'https', endPoint },
+    {});
+  const urls = requestUrls(script);
+  expect(urls.length).toBeGreaterThan(0);
+  for (const url of urls) {
+    expect(url).toBe('https://localhost/json');
+  }
+});
+
+// Names and values are encoded as the .NET builder encodes them, because
+// the script joins them into the request body as they stand.
+test('the parameters are encoded', async () => {
+  const script = await renderScript({ endPoint: '/json' }, {
+    'header.host': 'localhost',
+    'query.user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    'query.a b': "x~'y&z=1"
+  });
+  expect(renderedParameters(script)).toStrictEqual({
+    'user-agent': 'Mozilla%2F5.0+(Windows+NT+10.0%3B+Win64%3B+x64)',
+    'a+b': 'x%7E%27y%26z%3D1'
+  });
+});
+
+// A name is everything after the first dot of the evidence key, so a name
+// that itself contains a dot, such as id.usage, is kept whole.
+test('a parameter name keeps every part after the prefix', async () => {
+  const script = await renderScript({ endPoint: '/json' }, {
+    'header.host': 'localhost',
+    'query.id.usage': 'standard'
+  });
+  expect(renderedParameters(script)).toStrictEqual({
+    'id.usage': 'standard'
+  });
+});
+
+// Only query evidence becomes a parameter. A header whose name happens to
+// contain the word query is not one.
+test('only query evidence becomes a parameter', async () => {
+  const script = await renderScript({ endPoint: '/json' }, {
+    'header.host': 'localhost',
+    'header.x-query': 'header value',
+    'query.mark': 'kept'
+  });
+  expect(renderedParameters(script)).toStrictEqual({ mark: 'kept' });
+});

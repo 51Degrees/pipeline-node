@@ -22,6 +22,86 @@
 
 const url = require('url');
 
+const formContentType = 'application/x-www-form-urlencoded';
+
+/**
+ * Whether the request is a POST whose body is a form.
+ *
+ * @param {object} request an HTTP request object
+ * @returns {boolean} true for a POST with a form content type
+ */
+const isFormPost = function (request) {
+  if (typeof request.method !== 'string' ||
+    request.method.toUpperCase() !== 'POST' ||
+    !request.headers) {
+    return false;
+  }
+  const name = Object.keys(request.headers)
+    .find(key => key.toLowerCase() === 'content-type');
+  const contentType = name === undefined ? undefined : request.headers[name];
+  return typeof contentType === 'string' &&
+    contentType.toLowerCase().startsWith(formContentType);
+};
+
+/**
+ * The name and value pairs of a form body, with the values of a repeated
+ * name joined by commas as the .NET web integration joins them.
+ *
+ * @param {object|string|Buffer} body the parsed form or the body text
+ * @returns {Array<Array<string>>} the name and value pairs
+ */
+const formEntries = function (body) {
+  if (typeof body === 'string' || Buffer.isBuffer(body)) {
+    const params = new URLSearchParams(body.toString());
+    return [...new Set(params.keys())]
+      .map(name => [name, params.getAll(name).join(',')]);
+  }
+  if (typeof body === 'object') {
+    return Object.entries(body).map(([name, value]) =>
+      [name, Array.isArray(value) ? value.join(',') : value]);
+  }
+  return [];
+};
+
+/**
+ * Read a form body from a request into request.body, unless the request is
+ * not a form POST, something has read the body already, or the body is
+ * larger than the limit.
+ *
+ * @param {object} request an HTTP request object
+ * @param {number} maxBytes the largest body read
+ * @returns {Promise<void>} resolves once the body has been read
+ */
+const readFormBody = function (request, maxBytes) {
+  return new Promise((resolve, reject) => {
+    if (!isFormPost(request) ||
+      request.body !== undefined ||
+      typeof request.on !== 'function' ||
+      request.readableEnded === true) {
+      resolve();
+      return;
+    }
+    const chunks = [];
+    let length = 0;
+    let tooLarge = false;
+    request.on('data', chunk => {
+      length += chunk.length;
+      if (length > maxBytes) {
+        tooLarge = true;
+      } else if (tooLarge === false) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+    });
+    request.on('end', () => {
+      if (tooLarge === false) {
+        request.body = Buffer.concat(chunks).toString('utf8');
+      }
+      resolve();
+    });
+    request.on('error', reject);
+  });
+};
+
 /**
  * @typedef {import('./flowData')} FlowData
  */
@@ -89,7 +169,16 @@ class Evidence {
   /**
    * Add evidence to flowData from an HTTP request
    * This helper automatically adds evidence:
-   * headers, cookies, protocol, IP and query params
+   * headers, cookies, protocol, IP, query params and, for a POST with a
+   * form body, the form values.
+   *
+   * Form values are added as query evidence after the query string, so a
+   * form value replaces a query string value of the same name. They are
+   * read from request.body, which a framework's form parser sets, either as
+   * an object or as the body text. A plain Node request has no request.body,
+   * so use addFromRequestAsync to read the body from the request instead.
+   * The 51Degrees client script sends its values in a form body, so without
+   * one or the other they never reach the pipeline.
    *
    * @param {object} request an HTTP request object
    * @returns {Evidence} return updated evidence
@@ -166,7 +255,32 @@ class Evidence {
       evidence.add('query.' + param, value);
     });
 
+    // Add form values, after the query string so that they replace it.
+    if (isFormPost(request) && request.body !== undefined &&
+      request.body !== null) {
+      for (const [name, value] of formEntries(request.body)) {
+        evidence.add('query.' + name, value);
+      }
+    }
+
     return this;
+  }
+
+  /**
+   * Add evidence to flowData from an HTTP request, first reading a form
+   * body from the request when it is a POST with a form body and nothing
+   * has read the body already. The body text is kept in request.body, and
+   * then addFromRequest adds the evidence. A body larger than
+   * maxFormBytes is not read and no form values are added.
+   *
+   * @param {object} request an HTTP request object
+   * @param {number} [maxFormBytes] the largest form body read, one
+   * mebibyte unless given
+   * @returns {Promise<Evidence>} the updated evidence
+   */
+  addFromRequestAsync (request, maxFormBytes = 1024 * 1024) {
+    return readFormBody(request, maxFormBytes)
+      .then(() => this.addFromRequest(request));
   }
 
   /**

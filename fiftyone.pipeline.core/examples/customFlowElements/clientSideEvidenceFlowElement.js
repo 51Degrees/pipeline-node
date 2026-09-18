@@ -186,10 +186,11 @@ const server = http.createServer((req, res) => {
 
   // Add any information from the request
   // (headers, cookies and additional client side
-  // provided information)
-  flowData.evidence.addFromRequest(req);
-
-  flowData.process().then(function () {
+  // provided information). The client side script sends its information
+  // in a form body, so the asynchronous form reads that body as well.
+  flowData.evidence.addFromRequestAsync(req).then(function () {
+    return flowData.process();
+  }).then(function () {
     // Send back JSON if requesting it from the client side
     // via the JavaScriptBuilder
 
