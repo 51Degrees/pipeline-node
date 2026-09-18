@@ -212,3 +212,35 @@ test('post - data', done => {
     },
     done);
 });
+
+// The cloud service treats a request whose own User-Agent header names a
+// browser as a browser page, and such a page gets no 51Did until it has run
+// its snippets. The end user's User-Agent must therefore only travel as the
+// user-agent parameter in the body and never as the HTTP User-Agent header.
+each([
+  ['post', (client, url, data) => client.post(url, data)],
+  ['get', (client, url) => client.get(url)]
+])
+  .test('%s - end user User-Agent is not sent as the header', (name, send, done) => {
+    const browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 ' +
+      'Safari/537.36';
+    const port = POST_PORT;
+    let header;
+    server.addListener('request', (req, res) => {
+      header = req.headers['user-agent'];
+      res.writeHead(200);
+      res.end('{}');
+    });
+    server.listen(port, () => {
+      send(
+        new RequestClient(),
+        `http://localhost:${port}`,
+        { 'user-agent': browserUserAgent })
+        .then(() => {
+          expect(header === undefined || !header.includes('Mozilla'))
+            .toBe(true);
+        })
+        .then(() => done(), done);
+    });
+  });

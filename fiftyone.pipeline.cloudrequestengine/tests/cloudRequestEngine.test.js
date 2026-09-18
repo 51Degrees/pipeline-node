@@ -208,3 +208,60 @@ each([
     const result = engine.getContent(data);
     expect(result['User-Agent']).toBe(expectedValue);
   });
+
+/**
+ * Test that an evidence name which itself contains a dot keeps every part
+ * after the prefix. The cloud service reads the 51Did usage from id.usage,
+ * so evidence named query.id.usage must be sent as id.usage and not cut
+ * down to id, otherwise the service never creates a 51Did.
+ */
+each([
+  ['query.id.usage', 'standard', 'id.usage'],
+  ['header.id.usage', 'standard', 'id.usage'],
+  ['query.id.email', 'someone@example.com', 'id.email'],
+  ['server.client-ip', '81.2.69.142', 'client-ip'],
+  ['query.user-agent', 'iPhone', 'user-agent']
+])
+  .test('get content keeps the full name - %s', (key, value, expectedName) => {
+    const client = new MockRequestClient();
+    const engine = new CloudRequestEngine({
+      resourceKey: testResourceKey,
+      requestClient: client
+    });
+
+    const pipeline = new PipelineBuilder()
+      .add(engine)
+      .build();
+
+    const data = pipeline.createFlowData();
+    data.evidence.add(key, value);
+
+    const result = engine.getContent(data);
+    expect(result).toStrictEqual({ [expectedName]: value });
+  });
+
+/**
+ * Test that two dotted names which share their first part after the prefix
+ * are sent as two separate parameters rather than one overwriting the other.
+ */
+test('get content keeps dotted names apart', () => {
+  const client = new MockRequestClient();
+  const engine = new CloudRequestEngine({
+    resourceKey: testResourceKey,
+    requestClient: client
+  });
+
+  const pipeline = new PipelineBuilder()
+    .add(engine)
+    .build();
+
+  const data = pipeline.createFlowData();
+  data.evidence.add('query.id.usage', 'standard');
+  data.evidence.add('query.id.email', 'someone@example.com');
+
+  const result = engine.getContent(data);
+  expect(result).toStrictEqual({
+    'id.usage': 'standard',
+    'id.email': 'someone@example.com'
+  });
+});
