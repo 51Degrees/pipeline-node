@@ -88,7 +88,6 @@ read before the identifier is passed anywhere.
 
 | `Usage` | The cloud's `id.usage` | Meaning |
 | --- | --- | --- |
-| `NONE` | none | No usage bit is set. The cloud never issues such an identifier, so treat it as one that may not be passed on |
 | `NON_MARKETING` | `non-marketing` | Created for use that is not marketing. Must never be passed to a demand source |
 | `STANDARD` | `standard` | Created for standard marketing, being targeting unrelated to browsing history |
 | `PERSONALIZED` | `personalized` | Created for personalized marketing, being targeting related to browsing history |
@@ -101,14 +100,25 @@ non-marketing, which is the wrong way round for a rule that turns on it.
 `fodId.usage` answers with the highest usage granted, so that mistake cannot
 be made, and it is the only supported way to read the usage.
 
-`fodId.usageFromConsent` says whether the usage was worked out from an IAB
-consent string the caller sent rather than stated by the caller directly. Both
-are legitimate ways to arrive at a usage, and it says nothing about which
-usage it is.
+There are exactly these three values. A payload whose usage bits are all
+clear is not given a fourth value, and is refused with
+`ParseStatus.NO_USAGE` instead, because the cloud never writes such a flags
+byte and the only safe answer to one is not to pass the identifier on, which
+the refusal already gives.
+
+`fodId.usageIsIndirect` says whether the usage is indirect, being worked out
+by the issuer from a signal other than the caller stating it, or direct,
+being stated by the caller. A consent string is the only indirect signal
+today, so today it is true only where the usage was derived from an IAB
+consent string the caller sent. Both are legitimate ways to arrive at a
+usage, and it says nothing about which usage it is. It was called
+`usageFromConsent` before the field was restated as direct against
+indirect, and the old name has been removed.
 
 `Usage.name(usage)` gives the cross language name, for example
 `"NonMarketing"`, and `Usage.idUsage(usage)` gives the cloud's own `id.usage`
-value, for example `"non-marketing"`, or `null` for `NONE`.
+value, for example `"non-marketing"`. Both answer `null` for a value that
+is not a `Usage`.
 
 ## The terms a 51Did was created under
 
@@ -217,6 +227,7 @@ OWID library's status, so a specific reason is never reduced to a general one.
 | `PAYLOAD_TOO_SHORT` | 51Did | The payload is shorter than the 5 byte header (flags and licence id), so the type cannot be read |
 | `INVALID_TYPE_PAYLOAD_LENGTH` | 51Did | The header named a type and the payload is shorter than that type's match key needs, being 21 bytes for Random and 37 for Probabilistic and HashedEmail |
 | `UNSUPPORTED_PAYLOAD_VERSION` | 51Did | Bits 4 and 5 of the flags byte name a payload layout version this package does not know, so no field is read |
+| `NO_USAGE` | 51Did | Bits 0 to 2 of the flags byte are all clear, which is not a usage. The cloud never writes such a flags byte, so the identifier is damaged or forged |
 
 A Reserved type is not yet assigned, so the reader accepts it at any length
 from the header up and exposes whatever follows the header as the match key.
@@ -230,7 +241,7 @@ exception. They run the same checks, in the same order, and throw:
 | Thrown | When |
 | --- | --- |
 | `TypeError` | The argument is the wrong kind of thing, being `null`, `undefined`, a non-string to `fromBase64`, or a non-`Uint8Array` to `fromByteArray` |
-| `RangeError` | The payload is `PAYLOAD_TOO_SHORT`, `INVALID_TYPE_PAYLOAD_LENGTH` or `UNSUPPORTED_PAYLOAD_VERSION`, being the three statuses the 51Did payload rules produce. The error carries `status` |
+| `RangeError` | The payload is `PAYLOAD_TOO_SHORT`, `INVALID_TYPE_PAYLOAD_LENGTH`, `UNSUPPORTED_PAYLOAD_VERSION` or `NO_USAGE`, being the four statuses the 51Did payload rules produce. The error carries `status` |
 | `FodIdParseError` | The OWID library refused the envelope for any other status. The error carries `status` |
 
 A wrong argument type is a programming error and stays exceptional on every
@@ -263,7 +274,7 @@ and `PAYLOAD_LENGTH` are no longer part of the package.
 
 | Before | After |
 | --- | --- |
-| `fodId.flags` masked for a usage bit | `fodId.usage`, and `fodId.usageFromConsent` for bit 3 |
+| `fodId.flags` masked for a usage bit | `fodId.usage`, and `fodId.usageIsIndirect` for bit 3 |
 | `fodId.flags` masked for the type bits | `fodId.type` |
 | `fodId.hash` | `fodId.matchKey`, the same bytes under the name the Model Terms for Marketing use |
 | `fodId.dateMinutes` | `fodId.date`, which reports the same unsigned value |
@@ -310,14 +321,14 @@ npm test
 ## Usage
 
 ```js
-const { FodId, IdType, Usage, Terms } = require('fiftyone.pipeline.did');
+const { FodId, IdType, Usage } = require('fiftyone.pipeline.did');
 
 // Either base64 alphabet is accepted, the standard one the cloud issues and
 // the URL-safe one a page puts in a link, with or without padding.
 const fodId = FodId.fromBase64(base64FromCloudService);
 
 const usage = fodId.usage;        // Usage.NON_MARKETING / STANDARD / PERSONALIZED
-const fromConsent = fodId.usageFromConsent;
+const indirect = fodId.usageIsIndirect;
 const type = fodId.type;          // IdType.PROBABILISTIC / RANDOM / HASHED_EMAIL
 const licenseId = fodId.licenseId;
 const matchKey = fodId.matchKey;  // Uint8Array: SHA-256 or GUID bytes, see type
@@ -469,15 +480,29 @@ redeemed.context      // ContextResult: 'verified', 'mismatch', 'nocontext',
                       // 'notcheckable', 'expired', 'replayed', 'unreadable',
                       // 'unconfirmed'
 redeemed.signature    // SignatureResult: 'verified', 'invalid' or 'unknown'
-redeemed.factors      // only on a mismatch: { transport, device, browserip,
-                      //   connectionip, asn, browser } each 'verified',
-                      //   'mismatch' or null where nothing was compared
+redeemed.factors      // where there is something to diagnose:
+                      //   { transport, device, browserip, connectionip,
+                      //   asn, platformname, platformversion,
+                      //   browsername, browserversion } each 'verified',
+                      //   'mismatch', 'misconfigured', or null where
+                      //   nothing was compared
 redeemed.verifiedAt   // Date, on the redeemed and expired outcomes
 redeemed.secondsSinceVerified
 redeemed.statusCode   // 200, or 503 for 'unconfirmed', which may be retried
 redeemed.raw          // the body as received
 redeemed.toJSON()     // the cloud's own response shape, for relaying to a page
 ```
+
+The factor names are in `Factor`, in the order the cloud lists them. From
+cloud release 4.4.38 the operating system and the browser each have a name
+and a version, replacing the single `browser` factor, so a version mismatch
+beside a verified name reads as an upgrade and a mismatched name reads as a
+different operating system or browser. `factors` keeps every name exactly as
+the cloud sent it, including a name that is not in `Factor`, so a factor the
+cloud adds later reaches the caller without a new release of this package,
+and an older service's `browser` key stays under its own name rather than
+filling any of the four. A factor that is `misconfigured` was not checked by
+the service, and must never be read as a mismatch.
 
 A context string this package does not know maps to `unreadable`, so an
 unrecognised outcome is never mistaken for a good one, and `contextRaw` keeps

@@ -126,6 +126,28 @@ const FactorResult = Object.freeze({
 });
 
 /**
+ * The names of the creator context factors, as the cloud writes them as
+ * keys of `factors`, in the order the cloud lists them. The operating
+ * system and the browser each have a name and a version, so a version
+ * mismatch beside a verified name reads as an upgrade, and a mismatched
+ * name reads as a different operating system or browser. These four
+ * replaced the single `browser` factor from cloud release 4.4.38.
+ * {@link RedeemResult#factors} is not limited to these names, so a factor
+ * the cloud adds later still reaches the caller.
+ */
+const Factor = Object.freeze({
+  TRANSPORT: 'transport',
+  DEVICE: 'device',
+  BROWSER_IP: 'browserip',
+  CONNECTION_IP: 'connectionip',
+  ASN: 'asn',
+  PLATFORM_NAME: 'platformname',
+  PLATFORM_VERSION: 'platformversion',
+  BROWSER_NAME: 'browsername',
+  BROWSER_VERSION: 'browserversion'
+});
+
+/**
  * The reason a {@link DidClient#verifySignatureDetailed} answer was given.
  */
 const SignatureReason = Object.freeze({
@@ -233,10 +255,14 @@ class RedeemResult {
         ? SignatureResult.INVALID
         : SignatureResult.UNKNOWN;
     /**
-     * @type {object | undefined} factor name to {@link FactorResult} value
-     * (or null where nothing was compared), present only when the cloud
-     * sent `factors`, which is the mismatch outcome. The names are
-     * transport, device, browserip, connectionip, asn and browser.
+     * @type {object | undefined} {@link Factor} name to
+     * {@link FactorResult} value (or null where nothing was compared),
+     * present only when the cloud sent `factors`, which it does where there
+     * is something to diagnose, being a mismatch or a misconfigured result
+     * that still compared some factors. Every name is kept exactly as the
+     * cloud sent it, including one this package does not list in
+     * {@link Factor}, so a factor the cloud adds later reaches the caller
+     * without a new release of this package.
      */
     this.factors = parsed.factors && typeof parsed.factors === 'object'
       ? Object.freeze(Object.assign({}, parsed.factors))
@@ -861,6 +887,7 @@ module.exports = {
   ContextResult,
   SignatureResult,
   FactorResult,
+  Factor,
   SignatureReason,
   DidClientError,
   DidArgumentError,

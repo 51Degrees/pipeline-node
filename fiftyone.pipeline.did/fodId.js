@@ -30,7 +30,7 @@ const FodIdParseError = require('./fodIdParseError');
 /**
  * Why a read of a 51Did succeeded or failed. The OWID library's own
  * vocabulary is carried through unchanged, because a 51Did failing to be
- * an OWID is reported exactly as the OWID library reported it, and two
+ * an OWID is reported exactly as the OWID library reported it, and four
  * members are added for the outcomes that belong to the 51Did payload
  * rather than to the envelope. Frozen, and compared by value rather than
  * by the text of any message.
@@ -55,7 +55,13 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
    * layout this package knows would answer with values that are wrong
    * rather than absent.
    */
-  UNSUPPORTED_PAYLOAD_VERSION: 'UnsupportedPayloadVersion'
+  UNSUPPORTED_PAYLOAD_VERSION: 'UnsupportedPayloadVersion',
+  /**
+   * Bits 0 to 2 of the flags byte are all clear, which is not a usage. The
+   * cloud writes no flags byte without bit 0, so such a payload is damaged
+   * or forged, and it is refused rather than offered as a fourth usage.
+   */
+  NO_USAGE: 'NoUsage'
 }));
 
 /**
@@ -106,7 +112,8 @@ const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
 class FodId {
   /**
    * Why a read succeeded or failed, being the OWID library's statuses plus
-   * `PAYLOAD_TOO_SHORT` and `INVALID_TYPE_PAYLOAD_LENGTH`. Frozen.
+   * `PAYLOAD_TOO_SHORT`, `INVALID_TYPE_PAYLOAD_LENGTH`,
+   * `UNSUPPORTED_PAYLOAD_VERSION` and `NO_USAGE`. Frozen.
    * @type {Readonly<Record<string, string>>}
    */
   static ParseStatus = ParseStatus;
@@ -306,13 +313,16 @@ class FodId {
   }
 
   /**
-   * Whether the usage was derived from an IAB consent string the caller
-   * sent, rather than stated by the caller directly. Bit 3 of the flags.
-   * Both are legitimate ways to arrive at a usage, and this says nothing
-   * about which usage it is.
+   * Whether the usage is indirect, being worked out by the issuer from a
+   * signal other than the caller stating it. Bit 3 of the flags. False
+   * means the caller stated the usage directly. A consent string is the
+   * only indirect signal today, so today this is true only where the usage
+   * was derived from one, but a later signal of another kind sets the same
+   * bit. Both are legitimate ways to arrive at a usage, and this says
+   * nothing about which usage it is.
    * @returns {boolean}
    */
-  get usageFromConsent () {
+  get usageIsIndirect () {
     return (this._flags & 0b1000) !== 0;
   }
 
@@ -462,10 +472,10 @@ class FodId {
  * @param {Uint8Array} payload the payload bytes
  * @returns {{status: string, flags?: number, licenseId?: number,
  * matchKey?: Uint8Array, termsIndex?: number, length: number,
- * required: number, type?: number, payloadVersion?: number}} `status`
- * PARSED with the fields, or a 51Did status with the length the type
- * needed, and the version found where that is what the payload was refused
- * for
+ * required: number, type?: number, payloadVersion?: number,
+ * usageBits?: number}} `status` PARSED with the fields, or a 51Did status
+ * with the length the type needed, and the version or the usage bits found
+ * where that is what the payload was refused for
  */
 function unpack (payload) {
   const length = payload.length;
@@ -489,6 +499,19 @@ function unpack (payload) {
       length,
       required: layout.HEADER_LENGTH,
       payloadVersion
+    };
+  }
+  // Usage bits 000 are not a usage. The cloud writes no flags byte without
+  // bit 0, so a payload carrying them is damaged or forged, and there is
+  // nothing a caller could do with a fourth usage that a refusal does not
+  // already say, being that the identifier must not be passed on.
+  const usageBits = flags & 0b111;
+  if (usageBits === 0) {
+    return {
+      status: ParseStatus.NO_USAGE,
+      length,
+      required: layout.HEADER_LENGTH,
+      usageBits
     };
   }
   // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
@@ -616,7 +639,7 @@ function valueOrThrow (read) {
 }
 
 /**
- * The exception for a failed read. The three 51Did payload statuses keep the
+ * The exception for a failed read. The four 51Did payload statuses keep the
  * RangeError this package has always thrown for them, and every OWID status
  * is a FodIdParseError carrying the status. Each error carries `status` so
  * the reason can be acted on without reading the message.
@@ -638,6 +661,11 @@ function errorFor (read) {
     error = new RangeError(
       `51Did payload version ${read.detail.payloadVersion} is not one this ` +
       'package can read.');
+  } else if (read.status === ParseStatus.NO_USAGE) {
+    error = new RangeError(
+      '51Did payload carries usage bits ' +
+      read.detail.usageBits.toString(2).padStart(3, '0') +
+      ', which is not a usage.');
   } else {
     return new FodIdParseError(read.status);
   }

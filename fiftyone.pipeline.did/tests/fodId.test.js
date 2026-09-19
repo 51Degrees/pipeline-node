@@ -143,10 +143,12 @@ describe('FodId', () => {
     expect(FodId.fromBase64(envelopeBase64(p)).licenseId).toBe(0x80000000);
   });
 
-  test('a flags byte of zero is read unchanged', () => {
+  test('the least flags byte a reader accepts is read unchanged', () => {
+    // Bit 0 is the least a flags byte can carry, because usage bits 000
+    // are refused, which the usage tests cover.
     const p = canonicalPayload();
-    p[layout.FLAGS_OFFSET] = 0x00;
-    expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(0);
+    p[layout.FLAGS_OFFSET] = 0x01;
+    expect(FodId.fromBase64(envelopeBase64(p))._flags).toBe(1);
   });
 
   test('every flags bit outside the version is read unchanged', () => {
@@ -279,7 +281,6 @@ describe('FodId', () => {
   // mask for the non-marketing bit alone would say yes for every marketing
   // identifier, which is the wrong answer for a data protection decision.
   test.each([
-    [0b000, Usage.NONE, null],
     [0b001, Usage.NON_MARKETING, 'non-marketing'],
     [0b011, Usage.STANDARD, 'standard'],
     [0b111, Usage.PERSONALIZED, 'personalized']
@@ -290,16 +291,80 @@ describe('FodId', () => {
     expect(fod.usage).toBe(expected);
     expect(Usage.idUsage(fod.usage)).toBe(idUsage);
     expect(fod.type).toBe(IdType.RANDOM);
-    expect(fod.usageFromConsent).toBe(false);
+    expect(fod.usageIsIndirect).toBe(false);
   });
 
-  test('usage from consent is bit three', () => {
+  test('usage is indirect is bit three', () => {
     const p = canonicalRandomPayload();
     p[layout.FLAGS_OFFSET] = (1 << 6) | 0b1011;
     const fod = FodId.fromBase64(envelopeBase64(p));
-    expect(fod.usageFromConsent).toBe(true);
+    expect(fod.usageIsIndirect).toBe(true);
     expect(fod.usage).toBe(Usage.STANDARD);
   });
+
+  test.each([
+    [0b0001, false],
+    [0b1001, true],
+    [0b0011, false],
+    [0b1011, true],
+    [0b0111, false],
+    [0b1111, true]
+  ])('flags %s answer usage is indirect %s, and only from bit three',
+    (bits, indirect) => {
+      const p = canonicalPayload();
+      p[layout.FLAGS_OFFSET] = bits;
+      const fod = FodId.fromBase64(envelopeBase64(p));
+      expect(fod.usageIsIndirect).toBe(indirect);
+      expect(fod.usage).toBe(Usage.fromFlags(bits & 0b111));
+    });
+
+  test('the old usage from consent name is gone, with no alias', () => {
+    const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+    expect('usageFromConsent' in fod).toBe(false);
+  });
+
+  // Usage bits 000 are not a usage. The cloud never writes them, so the
+  // payload is refused the way an unknown payload version is, and never
+  // offered as a fourth usage.
+  test('Usage has exactly the three usages', () => {
+    expect(Object.keys(Usage).filter((k) => typeof Usage[k] === 'number'))
+      .toEqual(['NON_MARKETING', 'STANDARD', 'PERSONALIZED']);
+    expect('NONE' in Usage).toBe(false);
+    expect(() => Usage.fromFlags(0b1000)).toThrow(RangeError);
+    expect(Usage.name(0)).toBeNull();
+    expect(Usage.idUsage(0)).toBeNull();
+  });
+
+  test.each([
+    ['Probabilistic', 0b00, () => canonicalPayload()],
+    ['Random', 0b01, () => canonicalRandomPayload()],
+    ['HashedEmail', 0b10, () => canonicalPayload()],
+    ['Reserved', 0b11, () => canonicalPayload()]
+  ])('usage bits 000 are refused for the %s type, and the refusal names them',
+    (name, type, payload) => {
+      for (const bit3 of [0, 0b1000]) {
+        const p = payload();
+        p[layout.FLAGS_OFFSET] = (type << 6) | bit3;
+        const encoded = envelopeBase64(p);
+
+        const read = FodId.tryParse(encoded);
+        expect(read.ok).toBe(false);
+        expect(read.value).toBeNull();
+        expect(read.status).toBe(ParseStatus.NO_USAGE);
+        expect(FodId.tryFromByteArray(envelopeBytes(p)).status)
+          .toBe(ParseStatus.NO_USAGE);
+
+        let thrown;
+        try {
+          FodId.fromBase64(encoded);
+        } catch (error) {
+          thrown = error;
+        }
+        expect(thrown).toBeInstanceOf(RangeError);
+        expect(thrown.status).toBe(ParseStatus.NO_USAGE);
+        expect(thrown.message).toContain('usage bits 000');
+      }
+    });
 
   test('type is Random when bits are 01', () => {
     const fod = FodId.fromBase64(envelopeBase64(canonicalRandomPayload()));
@@ -336,7 +401,7 @@ describe('FodId', () => {
 
   test('Reserved header-only payload parses', () => {
     const p = new Uint8Array(layout.MATCH_KEY_OFFSET);
-    p[layout.FLAGS_OFFSET] = 0b1100_0000;
+    p[layout.FLAGS_OFFSET] = 0b1100_0001;
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RESERVED);
     expect(fod.matchKey.length).toBe(0);
@@ -456,7 +521,7 @@ describe('FodId', () => {
     // A Reserved type is not yet assigned, so everything after the header
     // is exposed as the match key and no byte is left to read as the terms.
     const p = new Uint8Array(layout.MATCH_KEY_OFFSET);
-    p[layout.FLAGS_OFFSET] = 0b1100_0000;
+    p[layout.FLAGS_OFFSET] = 0b1100_0001;
     const fod = FodId.fromBase64(envelopeBase64(p));
     expect(fod.type).toBe(IdType.RESERVED);
     expect(fod.terms).toBeNull();
@@ -569,12 +634,19 @@ describe('FodId', () => {
   test('the version is read apart from the usage and type bits', () => {
     // A reader masking the wrong bits would refuse a version 0 identifier
     // or let a later version through, so every combination is tried.
+    // Usage bits 000 are refused as no usage under version 0, and the
+    // version is read first, so a later version is still reported as such.
     for (const usage of [0b000, 0b001, 0b011, 0b111]) {
       for (const type of [0b00, 0b10, 0b11]) {
         const p = payloadEndingAtMatchKey();
         p[layout.FLAGS_OFFSET] = (type << 6) | usage;
 
-        expect(FodId.tryParse(envelopeBase64(p)).ok).toBe(true);
+        const read = FodId.tryParse(envelopeBase64(p));
+        if (usage === 0b000) {
+          expect(read.status).toBe(ParseStatus.NO_USAGE);
+        } else {
+          expect(read.ok).toBe(true);
+        }
 
         for (const version of [1, 2, 3]) {
           const refused = FodId.tryParse(
@@ -814,7 +886,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
     }
   }
 
-  test('the status vocabulary is the OWID one plus the three 51Did members', () => {
+  test('the status vocabulary is the OWID one plus the four 51Did members', () => {
     expect(Object.isFrozen(ParseStatus)).toBe(true);
     for (const [name, value] of Object.entries(owid.ParseStatus)) {
       expect(ParseStatus[name]).toBe(value);
@@ -824,8 +896,9 @@ describe('FodId.tryParse and tryFromByteArray', () => {
       .toBe('InvalidTypePayloadLength');
     expect(ParseStatus.UNSUPPORTED_PAYLOAD_VERSION)
       .toBe('UnsupportedPayloadVersion');
+    expect(ParseStatus.NO_USAGE).toBe('NoUsage');
     expect(Object.keys(ParseStatus))
-      .toHaveLength(Object.keys(owid.ParseStatus).length + 3);
+      .toHaveLength(Object.keys(owid.ParseStatus).length + 4);
     expect(SignatureStatus).toBe(owid.SignatureStatus);
   });
 
@@ -915,7 +988,7 @@ describe('FodId.tryParse and tryFromByteArray', () => {
   test('a Reserved payload keeps the best-effort read at any length from the header up', () => {
     for (const length of [layout.HEADER_LENGTH, 12, layout.PAYLOAD_LENGTH + 100]) {
       const p = new Uint8Array(length);
-      p[layout.FLAGS_OFFSET] = 0b1100_0000;
+      p[layout.FLAGS_OFFSET] = 0b1100_0001;
       const fod = expectParsed(FodId.tryParse(envelopeBase64(p)));
       expect(fod.type).toBe(IdType.RESERVED);
       expect(fod.matchKey).toHaveLength(length - layout.HEADER_LENGTH);

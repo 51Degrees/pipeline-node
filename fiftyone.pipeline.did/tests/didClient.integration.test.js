@@ -150,10 +150,10 @@ live('DidClient against the cloud', () => {
   // non-marketing bit reads every marketing identifier as non-marketing.
   // The label travels into the expectation so a failure names which
   // identifier it was.
-  const assertAligned = (label, id, usage, terms, fromConsent) => {
+  const assertAligned = (label, id, usage, terms, indirect) => {
     expect({ label, usage: id.usage }).toEqual({ label, usage });
-    expect({ label, fromConsent: id.usageFromConsent })
-      .toEqual({ label, fromConsent });
+    expect({ label, indirect: id.usageIsIndirect })
+      .toEqual({ label, indirect });
     expect({ label, terms: id.terms }).toEqual({ label, terms });
     expect({ label, type: id.type })
       .toEqual({ label, type: IdType.PROBABILISTIC });
@@ -190,7 +190,7 @@ live('DidClient against the cloud', () => {
       }
     });
 
-  test('a consent string sets the usage-from-consent bit', async () => {
+  test('a consent string sets the usage is indirect bit', async () => {
     let proven = 0;
     for (const [tcString, usage] of consentStrings) {
       // No id.usage is sent. A stated usage wins over a consent string, so
@@ -212,10 +212,10 @@ live('DidClient against the cloud', () => {
     }
     if (proven === 0) {
       console.warn('NOTHING PROVEN: this resource key returned no ' +
-        'identifier for either consent string, so the usage-from-consent ' +
+        'identifier for either consent string, so the usage is indirect ' +
         'bit was never read.');
     } else {
-      console.log(`Usage-from-consent read on ${proven} identifier(s).`);
+      console.log(`Usage is indirect read on ${proven} identifier(s).`);
     }
   });
 });
