@@ -23,6 +23,7 @@
 const FodId = require('./fodId');
 const layout = require('./internal/layout');
 const IdType = require('./idType');
+const PublicKeys = require('./publicKeys');
 const packageVersion = require('./package.json').version;
 
 /**
@@ -34,11 +35,7 @@ const DEFAULT_ENDPOINT = 'https://cloud.51degrees.com/api/v4/';
 /** Sent with every request so the cloud can tell which package called. */
 const USER_AGENT = 'fiftyone.pipeline.did/' + packageVersion;
 
-/** The OWID date field counts minutes from this moment. */
-const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 const MINUTE_MS = 60 * 1000;
-
-const BOUNDARY_TOLERANCE_MS = 15 * MINUTE_MS;
 
 /** A cached key list older than this is fetched again before use. */
 const KEY_LIST_MAX_AGE_MS = 24 * 60 * MINUTE_MS;
@@ -465,9 +462,9 @@ class DidClient {
    */
   async publicKeyFor (fodId) {
     const id = asFodId(fodId);
-    const date = dateOf(id);
+    const date = PublicKeys.createdAt(id);
     const keys = await this._keysFor(date);
-    return inForceAt(keys, date);
+    return PublicKeys.inForceAt(keys, date);
   }
 
   /**
@@ -500,9 +497,9 @@ class DidClient {
     if (!payloadLengthValid(id)) {
       return { valid: false, reason: SignatureReason.LENGTH };
     }
-    const date = dateOf(id);
+    const date = PublicKeys.createdAt(id);
     const keys = await this._keysFor(date);
-    const candidates = candidatesForDate(keys, date);
+    const candidates = PublicKeys.candidatesFor(keys, id);
     if (candidates.length === 0) {
       return { valid: false, reason: SignatureReason.NO_KEY };
     }
@@ -648,7 +645,7 @@ class DidClient {
    * @private
    */
   _needsRefetch (keys, date) {
-    if (inForceAt(keys, date) === null) {
+    if (PublicKeys.inForceAt(keys, date) === null) {
       return true;
     }
     const newestStart = keys[keys.length - 1].startsAt;
@@ -688,9 +685,9 @@ class DidClient {
   }
 
   /**
-   * GET id/key/{resource} and read each entry's start and public key.
-   * `startsAt` is read where present and `created` otherwise. Both are
-   * supported start fields in key-list responses. `weekStart` is ignored.
+   * GET id/key/{resource} and read each entry's start and public key
+   * through {@link PublicKeys.fromList}, so `startsAt` is read where
+   * present and `created` otherwise, and `weekStart` is ignored.
    * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
    * @private
    */
@@ -713,19 +710,11 @@ class DidClient {
         'Public keys answered with a body that is not a JSON array: ' +
         body, response.status, body);
     }
-    const keys = parsed.map((entry) => {
-      const start = entry && (entry.startsAt || entry.created);
-      const startsAt = typeof start === 'string' ? new Date(start) : null;
-      if (startsAt === null || isNaN(startsAt.getTime()) ||
-        typeof entry.publicKey !== 'string') {
-        throw new DidClientError(
-          'Public keys entry lacks a start or a publicKey: ' +
-          JSON.stringify(entry), response.status, body);
-      }
-      return Object.freeze({ startsAt, publicKey: entry.publicKey });
-    });
-    keys.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-    return Object.freeze(keys);
+    try {
+      return PublicKeys.fromList(parsed);
+    } catch (error) {
+      throw new DidClientError(error.message, response.status, body);
+    }
   }
 }
 
@@ -799,15 +788,6 @@ function ensureEncodedLength (value) {
 }
 
 /**
- * The identifier's creation moment as a Date.
- * @param {FodId} fodId the identifier
- * @returns {Date} the moment the envelope says it was created
- */
-function dateOf (fodId) {
-  return new Date(OWID_EPOCH_MS + fodId.date * MINUTE_MS);
-}
-
-/**
  * Whether the payload is at least the base length for its type, being five
  * header bytes plus a 32 byte match key, or 16 for a Random identifier.
  * Anything beyond the base is a creator context section, whose exact
@@ -824,48 +804,6 @@ function payloadLengthValid (fodId) {
     ? layout.GUID_LENGTH
     : layout.MATCH_KEY_LENGTH;
   return fodId.payload.length >= layout.HEADER_LENGTH + matchKeyLength;
-}
-
-/**
- * The entry in force at the moment, being the newest whose start has
- * passed, or null when the moment precedes every entry.
- * @param {PublicKeyEntry[]} keys the schedule, in any order
- * @param {Date} at the moment
- * @returns {PublicKeyEntry | null} the entry in force
- */
-function inForceAt (keys, at) {
-  let best = null;
-  for (const key of keys) {
-    if (key.startsAt.getTime() > at.getTime()) {
-      continue;
-    }
-    if (best === null || key.startsAt.getTime() > best.startsAt.getTime()) {
-      best = key;
-    }
-  }
-  return best;
-}
-
-/**
- * The entries that may have signed something created at the moment, best
- * first: the entry in force, then the entry in force a tolerance earlier
- * and the entry in force a tolerance later where those differ. Not every
- * earlier entry.
- * @param {PublicKeyEntry[]} keys the schedule, in any order
- * @param {Date} at the moment
- * @returns {PublicKeyEntry[]} the entries to try, best first
- */
-function candidatesForDate (keys, at) {
-  const candidates = [];
-  const add = (entry) => {
-    if (entry !== null && candidates.indexOf(entry) < 0) {
-      candidates.push(entry);
-    }
-  };
-  add(inForceAt(keys, at));
-  add(inForceAt(keys, new Date(at.getTime() - BOUNDARY_TOLERANCE_MS)));
-  add(inForceAt(keys, new Date(at.getTime() + BOUNDARY_TOLERANCE_MS)));
-  return candidates;
 }
 
 /**

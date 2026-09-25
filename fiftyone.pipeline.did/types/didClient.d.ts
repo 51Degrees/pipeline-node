@@ -260,9 +260,9 @@ export class DidClient {
      */
     private _refresh;
     /**
-     * GET id/key/{resource} and read each entry's start and public key.
-     * `startsAt` is read where present and `created` otherwise. Both are
-     * supported start fields in key-list responses. `weekStart` is ignored.
+     * GET id/key/{resource} and read each entry's start and public key
+     * through {@link PublicKeys.fromList}, so `startsAt` is read where
+     * present and `created` otherwise, and `weekStart` is ignored.
      * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
      * @private
      */

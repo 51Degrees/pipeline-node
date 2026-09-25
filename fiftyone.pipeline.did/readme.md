@@ -393,7 +393,9 @@ const sameMatchKey = Buffer.from(a.matchKey).equals(Buffer.from(b.matchKey));
 `DidClient` handles every manipulation of a 51Did a server needs against the
 cloud, so server code never builds a cloud URL or handles a key itself. One
 instance serves a whole server. It needs Node 18 or later for the built-in
-`fetch`, or a `fetch` function passed in.
+`fetch`, or a `fetch` function passed in. A caller that holds the published
+key list already, and fetches it on its own terms, chooses a key with
+`PublicKeys` instead, described under step 2a below.
 
 ```js
 const { FodId, DidClient } = require('fiftyone.pipeline.did');
@@ -457,6 +459,43 @@ const key = await client.publicKeyFor(fodId); // the entry in force, or null
 when a candidate key was tried and the signature did not match. A date no
 published key covers is `'nokey'`, and a key list that could not be fetched
 rejects with a `DidClientError`, so an outage never reads as a forgery.
+
+**2a. Choose the key from a list you already hold.** The rule the client
+applies is offered on its own as `PublicKeys`, for a caller that holds the
+published list already and fetches it on its own terms, for example a page
+that keeps the list between visits and only asks the cloud for keys newer
+than the newest start it holds. Such a caller chooses the same key the
+client would and never works the rule out for itself. Nothing in
+`PublicKeys` fetches or checks a signature.
+
+```js
+const { FodId, PublicKeys } = require('fiftyone.pipeline.did');
+
+// The list exactly as the id/key/{resource} endpoint answered it, or as it
+// was stored. Read once into frozen entries, oldest start first.
+const keys = PublicKeys.fromList(JSON.parse(body));
+
+const created = PublicKeys.createdAt(fodId);   // Date, from the envelope date
+const key = PublicKeys.inForceFor(keys, fodId); // the entry in force, or null
+const atMoment = PublicKeys.inForceAt(keys, new Date('2026-08-10T00:00:00Z'));
+
+// The entries to try in order, being the one in force and, within fifteen
+// minutes of a period boundary, the neighbour. Empty when no entry covers
+// the date. No earlier key is ever tried.
+for (const candidate of PublicKeys.candidatesFor(keys, fodId)) {
+  if (await fodId.verify(candidate.publicKey)) {
+    // Genuine.
+    break;
+  }
+}
+```
+
+`fromList` reads `startsAt`, or `created` where an entry carries no
+`startsAt`, and `publicKey`, and ignores everything else. It throws a
+`TypeError` for a value that is not a list or an entry that lacks either
+field. `inForceFor`, `candidatesFor` and `createdAt` take a `FodId` or its
+base64 in either alphabet, and a string that does not read as a 51Did throws
+the reader's own error, as `FodId.fromBase64` does.
 
 **3. Verify the signature through the cloud.** The open `verify` endpoint,
 one use against the resource key and no licence key needed. A value that does
