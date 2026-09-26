@@ -20,13 +20,10 @@
  * such notice(s) shall fulfill the requirements of that article.
  * ********************************************************************* */
 
-// PublicKeys is the rule for choosing a published signing key for an
-// identifier, offered on its own so that a caller holding the published
-// list already chooses the same key the client would. The cases here hold
-// the rule itself, being the list read as the cloud publishes it, the entry
-// in force at a moment, the entry for an identifier's date and the
-// neighbours tried around a period boundary. DidClient is checked against
-// the same rule in didClient.test.js, through its own fetch.
+// The rule for choosing a published signing key for an identifier: the
+// list read as the cloud publishes it, the entry in force at a moment, the
+// entry for an identifier's date and the neighbours tried around a period
+// boundary. DidClient is checked against the same rule in didClient.test.js.
 
 const {
   FodId,

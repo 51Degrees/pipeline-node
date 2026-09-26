@@ -7,21 +7,14 @@ export = PublicKeys;
  * @property {string} publicKey the key in SPKI PEM form
  */
 /**
- * Choosing which published signing key an identifier was signed with, given
- * the key list the cloud publishes and nothing else. These are the rules
- * {@link DidClient} applies once it has fetched the list, offered on their
- * own so that a caller holding the list already, for example a page that
- * keeps it between visits, chooses a key the same way the client does and
- * never works the rule out for itself.
- *
- * The list is the answer of the cloud's `id/key/{resource}` endpoint, being
- * one entry per key with the moment the key came into force and the key in
- * SPKI PEM form. A key is in force from its start until the next entry's
- * start, so the entry for a moment is the one whose start is the latest on
- * or before it, and a moment before every start has no key.
- *
- * Nothing here fetches the list or checks a signature. {@link DidClient}
- * fetches, and {@link FodId#checkSignature} checks against the key chosen.
+ * Chooses which published signing key an identifier was signed with, from
+ * the list the cloud's `id/key/{resource}` endpoint answers. {@link DidClient}
+ * applies these rules to the list it fetches, and a caller that already
+ * holds the list applies them here, so there is one rule. A key is in force
+ * from its start until the next entry's start, so the entry for a moment is
+ * the one whose start is the latest on or before it, and a moment before
+ * every start has no key. Nothing here fetches the list or checks a
+ * signature.
  */
 declare const PublicKeys: Readonly<{
     /**
