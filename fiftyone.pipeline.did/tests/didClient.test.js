@@ -778,6 +778,61 @@ describe('DidClient redeem', () => {
         .toBe(FactorResult.MISCONFIGURED);
     });
 
+  test('a factor the creator did not record is its own outcome',
+    async () => {
+      const body = {
+        signature: 'verified',
+        context: 'mismatch',
+        factors: {
+          transport: 'notrecorded',
+          device: 'verified',
+          browserip: 'mismatch',
+          connectionip: 'verified',
+          asn: 'misconfigured',
+          platformname: 'verified',
+          platformversion: 'notrecorded',
+          browsername: 'verified',
+          browserversion: 'verified'
+        }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(result.factors[Factor.TRANSPORT])
+        .toBe(FactorResult.NOT_RECORDED);
+      expect(result.factors[Factor.PLATFORM_VERSION])
+        .toBe(FactorResult.NOT_RECORDED);
+      expect(result.factors[Factor.BROWSER_IP]).toBe(FactorResult.MISMATCH);
+      expect(result.factors[Factor.ASN]).toBe(FactorResult.MISCONFIGURED);
+      expect(result.factors[Factor.DEVICE]).toBe(FactorResult.VERIFIED);
+      expect(result.factors[Factor.TRANSPORT])
+        .not.toBe(FactorResult.MISMATCH);
+      expect(result.factors[Factor.TRANSPORT])
+        .not.toBe(FactorResult.MISCONFIGURED);
+      expect(result.toJSON().factors).toEqual(body.factors);
+    });
+
+  test('the factor outcomes are the words the cloud writes', () => {
+    expect(Object.isFrozen(FactorResult)).toBe(true);
+    expect(Object.keys(FactorResult)).toEqual([
+      'VERIFIED', 'MISMATCH', 'MISCONFIGURED', 'NOT_RECORDED'
+    ]);
+    expect(Object.values(FactorResult)).toEqual([
+      'verified', 'mismatch', 'misconfigured', 'notrecorded'
+    ]);
+  });
+
+  test('a factor value this package does not list is passed through',
+    async () => {
+      const body = {
+        context: 'mismatch',
+        factors: { transport: 'somethingnewer' }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(result.factors.transport).toBe('somethingnewer');
+      expect(result.toJSON().factors).toEqual(body.factors);
+    });
+
   test('the factor names are the nine the cloud lists, in its order', () => {
     expect(Object.isFrozen(Factor)).toBe(true);
     expect(Object.keys(Factor)).toEqual([
