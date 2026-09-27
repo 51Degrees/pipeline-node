@@ -73,6 +73,7 @@ const MALFORMED = [
 const START_1 = new Date('2026-08-03T00:00:00Z');
 const START_2 = new Date('2026-08-10T00:00:00Z');
 const START_3 = new Date('2026-08-17T00:00:00Z');
+const START_4 = new Date('2026-08-24T00:00:00Z');
 
 /**
  * A fetch stand-in recording every call and answering from a handler.
@@ -138,6 +139,58 @@ async function signedAt (pair, at, options = {}) {
       version: options.version,
       domain: options.domain
     }));
+}
+
+/**
+ * One entry as the cloud's key route publishes it, with the dates in the
+ * form the cloud writes them and endsAt where one is given.
+ * @param {Date} startsAt when the key starts
+ * @param {Date | null} endsAt when the key ends, or null for none
+ * @param {string} publicKey the key as PEM
+ * @returns {object} the published entry
+ */
+function published (startsAt, endsAt, publicKey) {
+  const cloudDate = (date) => date.toISOString().replace(/Z$/, '0000Z');
+  const entry = { startsAt: cloudDate(startsAt), publicKey };
+  if (endsAt !== null) {
+    entry.endsAt = cloudDate(endsAt);
+  }
+  return entry;
+}
+
+/**
+ * A client on a clock the test moves, whose key requests are answered with
+ * the entries the test has published, filtered on the datetime parameter as
+ * the cloud's key route filters them, once `cloud.answering` resolves.
+ * @param {number} now the clock's first reading
+ * @returns {{client: DidClient, fetch: Function, cloud: object}} the
+ * client, the fetch stand-in, and the published entries with the clock
+ */
+function publishingClient (now) {
+  const cloud = { entries: [], now, answering: Promise.resolve() };
+  const fetch = fakeFetch(async (url) => {
+    if (url.indexOf('id/key/') < 0) {
+      throw new Error('unexpected request ' + url);
+    }
+    await cloud.answering;
+    const datetime = new URL(url).searchParams.get('datetime');
+    return response(200, cloud.entries.filter((entry) => datetime === null ||
+      new Date(entry.startsAt) >= new Date(datetime)));
+  });
+  const client = new DidClient({
+    resourceKey: RESOURCE, endpoint: ENDPOINT, fetch, now: () => cloud.now
+  });
+  return { client, fetch, cloud };
+}
+
+/**
+ * The datetime parameter a recorded key request carried.
+ * @param {object} call the recorded request
+ * @returns {Date | null} the moment, or null when the request had none
+ */
+function datetimeOf (call) {
+  const value = new URL(call.url).searchParams.get('datetime');
+  return value === null ? null : new Date(value);
 }
 
 describe('DidClient construction', () => {
@@ -208,6 +261,16 @@ describe('DidClient public keys', () => {
     expect(keys[1].publicKey).toBe(pems[1]);
   });
 
+  test('keeps endsAt, read from the form the cloud writes', async () => {
+    const { pems } = await schedule();
+    const { client } = keyClient([
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ]);
+    const keys = await client.publicKeys();
+    expect(keys.map((k) => k.endsAt)).toEqual([START_2, START_3]);
+  });
+
   test('second call is a cache hit', async () => {
     const { json } = await schedule();
     const { client, fetch } = keyClient(json);
@@ -272,37 +335,47 @@ describe('DidClient publicKeyFor', () => {
     expect(fetch.calls).toHaveLength(0);
   });
 
-  test('no refetch when the cache covers the date', async () => {
+  test('no refetch when the list held covers the date', async () => {
     const { pairs, json } = await schedule();
-    const { client, fetch } = keyClient(json);
+    let now = START_2.getTime() + DAY;
+    const { client, fetch } = keyClient(json, { now: () => now });
     await client.publicKeyFor(await signedAt(pairs[0], new Date(START_1.getTime() + DAY)));
+    now += 5 * MINUTE;
     await client.publicKeyFor(await signedAt(pairs[1], new Date(START_2.getTime() + DAY)));
-    await client.publicKeyFor(await signedAt(pairs[2], START_3));
+    now += 5 * MINUTE;
+    await client.publicKeyFor(await signedAt(pairs[1], new Date(START_3.getTime() - HOUR)));
     expect(fetch.calls).toHaveLength(1);
   });
 
-  test('refetches once when the date is later than the newest start', async () => {
+  test('refetches when the date is later than the newest start, at most once a minute', async () => {
     const { pairs, json } = await schedule();
-    const { client, fetch } = keyClient(json);
+    let now = START_2.getTime() + DAY;
+    const { client, fetch } = keyClient(json, { now: () => now });
     await client.publicKeyFor(await signedAt(pairs[1], new Date(START_2.getTime() + DAY)));
     expect(fetch.calls).toHaveLength(1);
+    now += MINUTE;
     const later = await signedAt(pairs[2], new Date(START_3.getTime() + DAY));
     const key = await client.publicKeyFor(later);
     expect(key.startsAt).toEqual(START_3);
     expect(fetch.calls).toHaveLength(2);
-    // The newest key still answers, so the next later date refetches again
-    // rather than being served from a list already known to end there.
+    // Without endsAt the newest key still answers. A later date asks again
+    // once a minute, never on every lookup.
+    await client.publicKeyFor(later);
+    expect(fetch.calls).toHaveLength(2);
+    now += MINUTE;
     await client.publicKeyFor(later);
     expect(fetch.calls).toHaveLength(3);
   });
 
-  test('refetches once when no entry covers the date', async () => {
+  test('no refetch for a date before every entry, which no later answer adds', async () => {
     const { pairs, json } = await schedule();
-    const { client, fetch } = keyClient(json);
+    let now = START_2.getTime() + DAY;
+    const { client, fetch } = keyClient(json, { now: () => now });
     await client.publicKeyFor(await signedAt(pairs[1], new Date(START_2.getTime() + DAY)));
+    now += 5 * MINUTE;
     const early = await signedAt(pairs[0], new Date(START_1.getTime() - DAY));
     expect(await client.publicKeyFor(early)).toBeNull();
-    expect(fetch.calls).toHaveLength(2);
+    expect(fetch.calls).toHaveLength(1);
   });
 
   test('refetches when the list is more than a day old', async () => {
@@ -317,6 +390,9 @@ describe('DidClient publicKeyFor', () => {
     now += 2 * HOUR;
     await client.publicKeyFor(fod);
     expect(fetch.calls).toHaveLength(2);
+    // The daily fetch is of the whole list.
+    expect(datetimeOf(fetch.calls[0])).toBeNull();
+    expect(datetimeOf(fetch.calls[1])).toBeNull();
     await client.publicKeyFor(fod);
     expect(fetch.calls).toHaveLength(2);
   });
@@ -327,6 +403,351 @@ describe('DidClient publicKeyFor', () => {
     const early = await signedAt(pairs[0], new Date(START_1.getTime() - DAY));
     expect(await client.publicKeyFor(early)).toBeNull();
     expect(fetch.calls).toHaveLength(1);
+  });
+});
+
+// The cloud publishes each key only from shortly before its period starts,
+// with endsAt, and may replace a key before its endsAt. The client verifies
+// offline until the newest key it holds ends.
+describe('DidClient key list end dates', () => {
+  test('no request inside the period of a newest key that ends later', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } =
+      publishingClient(START_3.getTime() - 30 * MINUTE);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    for (const at of [
+      new Date(START_2.getTime() + MINUTE),
+      new Date(START_2.getTime() + DAY),
+      new Date(START_2.getTime() + 3 * DAY),
+      new Date(START_2.getTime() + 6 * DAY),
+      new Date(START_3.getTime() - HOUR)
+    ]) {
+      await expect(client.verifySignatureDetailed(await signedAt(pairs[1], at)))
+        .resolves.toEqual({ valid: true, reason: SignatureReason.VERIFIED });
+      // Past the minute between requests, so only the end of the list
+      // held keeps them from being made.
+      cloud.now += 5 * MINUTE;
+    }
+    expect(fetch.calls).toHaveLength(1);
+    expect(datetimeOf(fetch.calls[0])).toBeNull();
+  });
+
+  test('a 51Did dated close to the end of the list held fetches from the newest start and verifies with the new key', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } =
+      publishingClient(START_3.getTime() - 20 * MINUTE);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    // The next key is published shortly before it starts, and a creator
+    // may sign with it in the minutes before.
+    cloud.entries.push(published(START_3, START_4, pems[2]));
+    cloud.now += 10 * MINUTE;
+    const early = await signedAt(pairs[2], new Date(START_3.getTime() - MINUTE));
+    // Too close to the end of the list held for it to answer, so the list
+    // is fetched before any key is chosen or signature checked.
+    await expect(client.publicKeyFor(early)).resolves.toMatchObject({
+      startsAt: START_2
+    });
+    expect(fetch.calls).toHaveLength(2);
+    expect(datetimeOf(fetch.calls[1])).toEqual(START_2);
+    await expect(client.verifySignatureDetailed(early)).resolves.toEqual({
+      valid: true, reason: SignatureReason.VERIFIED
+    });
+    expect(fetch.calls).toHaveLength(2);
+    const keys = await client.publicKeys();
+    expect(keys.map((k) => k.startsAt)).toEqual([START_1, START_2, START_3]);
+    expect(keys.map((k) => k.endsAt)).toEqual([START_2, START_3, START_4]);
+    // The merged list reaches through the next period.
+    cloud.now += 5 * MINUTE;
+    const next = await signedAt(pairs[2], new Date(START_3.getTime() + DAY));
+    await expect(client.verifySignature(next)).resolves.toBe(true);
+    expect(fetch.calls).toHaveLength(2);
+  });
+
+  test('a 51Did dated after the end of the list held verifies once the next key is fetched', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_3.getTime() - HOUR);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    cloud.entries.push(published(START_3, START_4, pems[2]));
+    cloud.now = START_3.getTime() + 2 * HOUR;
+    const after = await signedAt(pairs[2], new Date(START_3.getTime() + HOUR));
+    await expect(client.verifySignature(after)).resolves.toBe(true);
+    expect(fetch.calls).toHaveLength(2);
+    expect(datetimeOf(fetch.calls[1])).toEqual(START_2);
+  });
+
+  test('no request for a current 51Did against a list without endsAt that holds later keys', async () => {
+    const { pairs, json } = await schedule();
+    let now = START_2.getTime() + DAY;
+    const { client, fetch } = keyClient(json, { now: () => now });
+    for (let i = 0; i < 3; i++) {
+      const current = await signedAt(pairs[1], new Date(now));
+      await expect(client.verifySignature(current)).resolves.toBe(true);
+      now += 5 * MINUTE;
+    }
+    expect(fetch.calls).toHaveLength(1);
+  });
+
+  test('51Dids dated past the end where nothing newer is published make one request a minute and answer nokey', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_2.getTime() + DAY);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    cloud.now += 2 * MINUTE;
+    const unpublished = await generateKeyPair();
+    const first = await signedAt(unpublished, new Date(START_3.getTime() + HOUR));
+    const second = await signedAt(unpublished, new Date(START_3.getTime() + 2 * HOUR));
+    // Signed with the newest key held, but dated where it has ended.
+    const forged = await signedAt(pairs[1], new Date(START_3.getTime() + DAY));
+    const noKey = { valid: false, reason: SignatureReason.NO_KEY };
+    await expect(client.verifySignatureDetailed(first)).resolves.toEqual(noKey);
+    await expect(client.verifySignatureDetailed(second)).resolves.toEqual(noKey);
+    await expect(client.verifySignatureDetailed(forged)).resolves.toEqual(noKey);
+    await expect(client.publicKeyFor(second)).resolves.toBeNull();
+    expect(fetch.calls).toHaveLength(2);
+    expect(datetimeOf(fetch.calls[1])).toEqual(START_2);
+    cloud.now += MINUTE;
+    await expect(client.verifySignatureDetailed(second)).resolves.toEqual(noKey);
+    expect(fetch.calls).toHaveLength(3);
+  });
+
+  test('a later answer with endsAt replaces a held entry without it', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_2.getTime() + DAY);
+    cloud.entries = [
+      published(START_1, null, pems[0]),
+      published(START_2, null, pems[1])
+    ];
+    const current = await signedAt(pairs[1], new Date(START_2.getTime() + DAY));
+    await expect(client.verifySignature(current)).resolves.toBe(true);
+    // Without endsAt the list held ends at its newest start, so the next
+    // check asks from there.
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await expect(client.verifySignature(current)).resolves.toBe(true);
+    expect(fetch.calls).toHaveLength(2);
+    expect(datetimeOf(fetch.calls[1])).toEqual(START_2);
+    const keys = await client.publicKeys();
+    expect(keys.map((k) => k.startsAt)).toEqual([START_1, START_2]);
+    // The first entry was not in the answer, so it is kept as it was held.
+    expect(keys[0].endsAt).toBeUndefined();
+    expect(keys[1].endsAt).toEqual(START_3);
+    cloud.now += 5 * MINUTE;
+    const later = await signedAt(pairs[1], new Date(START_3.getTime() - HOUR));
+    await expect(client.verifySignature(later)).resolves.toBe(true);
+    expect(fetch.calls).toHaveLength(2);
+  });
+
+  test('a key replaced part way through its period is picked up on the first signature that fails', async () => {
+    const { pairs, pems } = await schedule();
+    const replacement = await generateKeyPair();
+    const replacedAt = new Date(START_2.getTime() + 3 * DAY);
+    const { client, fetch, cloud } =
+      publishingClient(replacedAt.getTime() - HOUR);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    // The cloud ends the key early and publishes the replacement from then.
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, replacedAt, pems[1]),
+      published(replacedAt, START_3, await publicPemOf(replacement))
+    ];
+    cloud.now = replacedAt.getTime() + HOUR;
+    const after = new Date(replacedAt.getTime() + 30 * MINUTE);
+    const genuine = await signedAt(replacement, after);
+    await expect(client.verifySignatureDetailed(genuine)).resolves.toEqual({
+      valid: true, reason: SignatureReason.VERIFIED
+    });
+    expect(fetch.calls).toHaveLength(2);
+    expect(datetimeOf(fetch.calls[1])).toEqual(START_2);
+    // The replaced key no longer answers after the replacement.
+    const oldKey = await signedAt(pairs[1], after);
+    await expect(client.verifySignatureDetailed(oldKey)).resolves.toEqual({
+      valid: false, reason: SignatureReason.SIGNATURE
+    });
+    // It still answers for its own, now shorter, period, and as the
+    // neighbouring key in the minutes after the replacement starts.
+    const before = await signedAt(pairs[1], new Date(START_2.getTime() + DAY));
+    await expect(client.verifySignature(before)).resolves.toBe(true);
+    const justAfter =
+      await signedAt(pairs[1], new Date(replacedAt.getTime() + MINUTE));
+    await expect(client.verifySignature(justAfter)).resolves.toBe(true);
+    expect(fetch.calls).toHaveLength(2);
+  });
+
+  test('after a failed signature the keys are fetched from the start of the one in force at its date', async () => {
+    const { pems } = await schedule();
+    const replacement = await generateKeyPair();
+    const replacedAt = new Date(START_2.getTime() + 3 * DAY);
+    const { client, fetch, cloud } =
+      publishingClient(replacedAt.getTime() - HOUR);
+    // A list from a cloud that sends no endsAt and publishes keys before
+    // they start, so a later key than the one in force is held.
+    cloud.entries = [
+      published(START_1, null, pems[0]),
+      published(START_2, null, pems[1]),
+      published(START_3, null, pems[2])
+    ];
+    await client.publicKeys();
+    // The cloud now publishes only keys that have started, and has
+    // replaced the one in force.
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, replacedAt, pems[1]),
+      published(replacedAt, START_3, await publicPemOf(replacement))
+    ];
+    cloud.now = replacedAt.getTime() + HOUR;
+    const genuine = await signedAt(
+      replacement, new Date(replacedAt.getTime() + 30 * MINUTE));
+    await expect(client.verifySignature(genuine)).resolves.toBe(true);
+    expect(fetch.calls.map(datetimeOf)).toEqual([null, START_2]);
+  });
+
+  test('fetches of the whole list neither count toward the minute nor are held back by it', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_2.getTime() + DAY);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    const pastTheEnd =
+      await signedAt(pairs[1], new Date(START_3.getTime() + HOUR));
+    await client.publicKeyFor(pastTheEnd);
+    await client.publicKeyFor(pastTheEnd);
+    expect(fetch.calls.map(datetimeOf)).toEqual([null, START_2]);
+    cloud.now += DAY + MINUTE;
+    await client.publicKeyFor(pastTheEnd);
+    await client.publicKeyFor(pastTheEnd);
+    expect(fetch.calls.map(datetimeOf))
+      .toEqual([null, START_2, null, START_2]);
+  });
+
+  test('only a fetch of the whole list resets its age', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_2.getTime() + DAY);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    const current = await signedAt(pairs[1], new Date(START_2.getTime() + DAY));
+    const pastTheEnd =
+      await signedAt(pairs[1], new Date(START_3.getTime() + HOUR));
+    await client.verifySignature(current);
+    cloud.now += 12 * HOUR;
+    await client.publicKeyFor(pastTheEnd);
+    cloud.now += 13 * HOUR;
+    await client.verifySignature(current);
+    expect(fetch.calls.map(datetimeOf)).toEqual([null, START_2, null]);
+  });
+
+  test('an answer with an entry that does not end after it starts is refused, and none of it is merged', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } =
+      publishingClient(START_3.getTime() - 20 * MINUTE);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    cloud.entries = [
+      published(START_2, START_2, pems[1]),
+      published(START_3, START_4, pems[2])
+    ];
+    cloud.now += 10 * MINUTE;
+    const early = await signedAt(pairs[2], new Date(START_3.getTime() - MINUTE));
+    await expect(client.verifySignatureDetailed(early))
+      .rejects.toBeInstanceOf(DidClientError);
+    expect(fetch.calls).toHaveLength(2);
+    const keys = await client.publicKeys();
+    expect(keys.map((k) => k.startsAt)).toEqual([START_1, START_2]);
+    expect(keys[1].endsAt).toEqual(START_3);
+  });
+
+  test('a signature that fails against a list fetched for the same check is not checked again', async () => {
+    const { pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_2.getTime() + DAY);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    const forged = await signedAt(
+      await generateKeyPair(), new Date(START_2.getTime() + DAY));
+    await expect(client.verifySignatureDetailed(forged)).resolves.toEqual({
+      valid: false, reason: SignatureReason.SIGNATURE
+    });
+    expect(fetch.calls).toHaveLength(1);
+  });
+
+  test('failed signatures inside the period make at most one request a minute', async () => {
+    const { pems } = await schedule();
+    const { client, fetch, cloud } = publishingClient(START_2.getTime() + DAY);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    cloud.now += 2 * MINUTE;
+    const forger = await generateKeyPair();
+    const failed = { valid: false, reason: SignatureReason.SIGNATURE };
+    for (let i = 0; i < 3; i++) {
+      const forged = await signedAt(
+        forger, new Date(START_2.getTime() + DAY + i * MINUTE));
+      await expect(client.verifySignatureDetailed(forged))
+        .resolves.toEqual(failed);
+    }
+    expect(fetch.calls).toHaveLength(2);
+    cloud.now += MINUTE;
+    const forged = await signedAt(forger, new Date(START_2.getTime() + DAY));
+    await expect(client.verifySignatureDetailed(forged)).resolves.toEqual(failed);
+    expect(fetch.calls).toHaveLength(3);
+  });
+
+  test('callers at the same moment share one request', async () => {
+    const { pairs, pems } = await schedule();
+    const { client, fetch, cloud } =
+      publishingClient(START_3.getTime() - 20 * MINUTE);
+    cloud.entries = [
+      published(START_1, START_2, pems[0]),
+      published(START_2, START_3, pems[1])
+    ];
+    await client.publicKeys();
+    cloud.entries.push(published(START_3, START_4, pems[2]));
+    cloud.now = START_3.getTime() + 10 * MINUTE;
+    const first = await signedAt(pairs[2], new Date(START_3.getTime() + MINUTE));
+    const second = await signedAt(pairs[2], new Date(START_3.getTime() + 2 * MINUTE));
+    // The answer is held back until both callers are seen waiting on it.
+    let release;
+    cloud.answering = new Promise((resolve) => { release = resolve; });
+    const settled = [];
+    const checks = [first, second].map((fodId, i) =>
+      client.verifySignature(fodId).then((valid) => {
+        settled.push(i);
+        return valid;
+      }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetch.calls).toHaveLength(2);
+    expect(settled).toEqual([]);
+    release();
+    await expect(Promise.all(checks)).resolves.toEqual([true, true]);
+    expect(fetch.calls).toHaveLength(2);
   });
 });
 

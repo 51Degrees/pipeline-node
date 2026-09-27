@@ -22,8 +22,10 @@
 
 // The rule for choosing a published signing key for an identifier: the
 // list read as the cloud publishes it, the entry in force at a moment, the
-// entry for an identifier's date and the neighbours tried around a period
-// boundary. DidClient is checked against the same rule in didClient.test.js.
+// entry for an identifier's date, the neighbours tried around a period
+// boundary, whether the list held answers for a date without a fetch, and
+// how a later answer is merged in. DidClient is checked against the same
+// rule in didClient.test.js.
 
 const {
   FodId,
@@ -49,6 +51,7 @@ const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 const START_1 = new Date('2026-08-03T00:00:00Z');
 const START_2 = new Date('2026-08-10T00:00:00Z');
 const START_3 = new Date('2026-08-17T00:00:00Z');
+const START_4 = new Date('2026-08-24T00:00:00Z');
 
 /**
  * A schedule of three real key pairs and the JSON the key endpoint would
@@ -71,6 +74,36 @@ async function schedule () {
     { startsAt: START_2.toISOString(), weekStart: 'x', publicKey: pems[1] }
   ];
   return { pairs, pems, json };
+}
+
+/**
+ * One entry as the cloud's key route publishes it, with the dates in the
+ * form the cloud writes them and endsAt where one is given.
+ * @param {Date} startsAt when the key starts
+ * @param {Date | null} endsAt when the key ends, or null for none
+ * @param {string} publicKey the key as PEM
+ * @returns {object} the published entry
+ */
+function published (startsAt, endsAt, publicKey) {
+  const cloudDate = (date) => date.toISOString().replace(/Z$/, '0000Z');
+  const entry = { startsAt: cloudDate(startsAt), publicKey };
+  if (endsAt !== null) {
+    entry.endsAt = cloudDate(endsAt);
+  }
+  return entry;
+}
+
+/**
+ * The list the cloud publishes during the second period, which holds the
+ * keys that have started, each with its end.
+ * @param {string[]} pems the public keys of the schedule
+ * @returns {ReadonlyArray<object>} the list read into entries
+ */
+function startedList (pems) {
+  return PublicKeys.fromList([
+    published(START_1, START_2, pems[0]),
+    published(START_2, START_3, pems[1])
+  ]);
 }
 
 /**
@@ -109,6 +142,48 @@ describe('PublicKeys.fromList', () => {
       })));
     expect(keys.map((k) => k.startsAt)).toEqual([START_1, START_2, START_3]);
   });
+
+  test('keeps endsAt as a Date, read from the form the cloud writes', async () => {
+    const { pems } = await schedule();
+    const keys = startedList(pems);
+    expect(keys.map((k) => k.endsAt)).toEqual([START_2, START_3]);
+  });
+
+  test('reads a stored list back to the same entries, endsAt included', async () => {
+    const { pems } = await schedule();
+    const keys = startedList(pems);
+    const stored = PublicKeys.fromList(JSON.parse(JSON.stringify(keys)));
+    expect(stored).toEqual(keys);
+    const copied = PublicKeys.fromList(keys);
+    expect(copied).toEqual(keys);
+    expect(copied[0].endsAt).not.toBe(keys[0].endsAt);
+  });
+
+  test('an entry without endsAt is valid and carries none', async () => {
+    const { json } = await schedule();
+    for (const entries of [
+      json, json.map((entry) => Object.assign({}, entry, { endsAt: null }))
+    ]) {
+      const keys = PublicKeys.fromList(entries);
+      expect(keys).toHaveLength(3);
+      expect(keys[0]).not.toHaveProperty('endsAt');
+    }
+  });
+
+  test.each([['not a date'], [42], [{}], [new Date('nonsense')]])(
+    'refuses an endsAt of %p, which is not a date', (endsAt) => {
+      expect(() => PublicKeys.fromList([
+        { startsAt: START_1.toISOString(), endsAt, publicKey: 'x' }
+      ])).toThrow(TypeError);
+    });
+
+  test.each([[START_1], [new Date(START_1.getTime() - DAY)]])(
+    'refuses an endsAt of %p, which is not after the start', (endsAt) => {
+      expect(() => PublicKeys.fromList([
+        published(START_2, null, 'x'),
+        published(START_1, endsAt, 'y')
+      ])).toThrow(TypeError);
+    });
 
   test('the list and its entries are frozen', async () => {
     const { json } = await schedule();
@@ -201,11 +276,29 @@ describe('PublicKeys.inForceAt', () => {
       .publicKey).toBe(pems[1]);
   });
 
+  test('an entry with endsAt is in force until then and no longer', async () => {
+    const { pems } = await schedule();
+    const keys = startedList(pems);
+    expect(PublicKeys.inForceAt(keys, new Date(START_2.getTime() - 1))
+      .publicKey).toBe(pems[0]);
+    expect(PublicKeys.inForceAt(keys, new Date(START_3.getTime() - 1))
+      .publicKey).toBe(pems[1]);
+    expect(PublicKeys.inForceAt(keys, START_3)).toBeNull();
+    expect(PublicKeys.inForceAt(keys, new Date(START_3.getTime() + 30 * DAY)))
+      .toBeNull();
+  });
+
   test('refuses a list that was not read first', () => {
     expect(() => PublicKeys.inForceAt(
       [{ startsAt: START_1.toISOString(), publicKey: 'x' }], START_2))
       .toThrow(TypeError);
     expect(() => PublicKeys.inForceAt('keys', START_2)).toThrow(TypeError);
+    expect(() => PublicKeys.inForceAt(
+      [{ startsAt: START_1, endsAt: START_2.toISOString(), publicKey: 'x' }],
+      START_1)).toThrow(TypeError);
+    expect(() => PublicKeys.inForceAt(
+      [{ startsAt: START_2, endsAt: START_1, publicKey: 'x' }],
+      START_2)).toThrow(TypeError);
   });
 
   test('refuses a moment that is not a valid Date', async () => {
@@ -243,11 +336,20 @@ describe('PublicKeys.inForceFor', () => {
     expect(PublicKeys.inForceFor(keys, early)).toBeNull();
   });
 
-  test('the newest entry answers for every later date', async () => {
+  test('the newest entry answers for every later date where it carries no endsAt', async () => {
     const { pairs, pems, json } = await schedule();
     const keys = PublicKeys.fromList(json);
     const late = await signedAt(pairs[2], new Date(START_3.getTime() + 90 * DAY));
     expect(PublicKeys.inForceFor(keys, late).publicKey).toBe(pems[2]);
+  });
+
+  test('the newest entry answers until its endsAt and not after', async () => {
+    const { pairs, pems } = await schedule();
+    const keys = startedList(pems);
+    const inside = await signedAt(pairs[1], new Date(START_3.getTime() - HOUR));
+    expect(PublicKeys.inForceFor(keys, inside).publicKey).toBe(pems[1]);
+    const late = await signedAt(pairs[1], new Date(START_3.getTime() + DAY));
+    expect(PublicKeys.inForceFor(keys, late)).toBeNull();
   });
 
   test('agrees with the client given the same list', async () => {
@@ -312,6 +414,16 @@ describe('PublicKeys.candidatesFor', () => {
     expect(PublicKeys.candidatesFor(keys, early)).toEqual([]);
   });
 
+  test('tries the newest entry just past its endsAt and nothing well past it', async () => {
+    const { pairs, pems } = await schedule();
+    const keys = startedList(pems);
+    const justPast = await signedAt(pairs[1], new Date(START_3.getTime() + MINUTE));
+    expect(PublicKeys.candidatesFor(keys, justPast).map((k) => k.publicKey))
+      .toEqual([pems[1]]);
+    const wellPast = await signedAt(pairs[1], new Date(START_3.getTime() + HOUR));
+    expect(PublicKeys.candidatesFor(keys, wellPast)).toEqual([]);
+  });
+
   test('the first candidate is the one inForceFor answers', async () => {
     const { pairs, json } = await schedule();
     const keys = PublicKeys.fromList(json);
@@ -330,11 +442,143 @@ describe('PublicKeys.candidatesFor', () => {
   });
 });
 
+describe('PublicKeys.covers', () => {
+  test('is true inside the period of the newest entry, away from its end', async () => {
+    const { pems } = await schedule();
+    const keys = startedList(pems);
+    expect(PublicKeys.covers(keys, START_1)).toBe(true);
+    expect(PublicKeys.covers(keys, new Date(START_2.getTime() + DAY))).toBe(true);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() - HOUR))).toBe(true);
+  });
+
+  test('is false close to the end of the list, at it and past it', async () => {
+    const { pems } = await schedule();
+    const keys = startedList(pems);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() - MINUTE)))
+      .toBe(false);
+    expect(PublicKeys.covers(keys, START_3)).toBe(false);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() + DAY)))
+      .toBe(false);
+  });
+
+  test('ends at the newest start where the list gives no endsAt', async () => {
+    const { json } = await schedule();
+    const keys = PublicKeys.fromList(json);
+    expect(PublicKeys.covers(keys, new Date(START_2.getTime() + DAY))).toBe(true);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() - HOUR))).toBe(true);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() - MINUTE)))
+      .toBe(false);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() + DAY)))
+      .toBe(false);
+  });
+
+  test('takes the end from the newest entry alone, in any order', async () => {
+    const { pems } = await schedule();
+    const keys = PublicKeys.fromList([
+      published(START_2, START_3, pems[1]),
+      published(START_1, START_4, pems[0])
+    ]);
+    expect(PublicKeys.covers(keys, new Date(START_3.getTime() - HOUR))).toBe(true);
+    expect(PublicKeys.covers(keys, START_3)).toBe(false);
+    expect(PublicKeys.covers([...startedList(pems)].reverse(),
+      new Date(START_3.getTime() - HOUR))).toBe(true);
+  });
+
+  test('is false for an empty list', () => {
+    expect(PublicKeys.covers([], START_2)).toBe(false);
+  });
+
+  test('refuses a list that was not read first, and a moment that is not a Date', async () => {
+    const { json } = await schedule();
+    expect(() => PublicKeys.covers(json, START_2)).toThrow(TypeError);
+    expect(() => PublicKeys.covers('keys', START_2)).toThrow(TypeError);
+    expect(() => PublicKeys.covers([], new Date('nonsense'))).toThrow(TypeError);
+    expect(() => PublicKeys.covers([], START_2.getTime())).toThrow(TypeError);
+  });
+});
+
+describe('PublicKeys.merge', () => {
+  test('adds the entries of the answer and keeps every older entry', async () => {
+    const { pems } = await schedule();
+    const held = startedList(pems);
+    const answer = PublicKeys.fromList([
+      published(START_2, START_3, pems[1]),
+      published(START_3, START_4, pems[2])
+    ]);
+    const merged = PublicKeys.merge(held, answer);
+    expect(merged.map((k) => k.startsAt)).toEqual([START_1, START_2, START_3]);
+    expect(merged.map((k) => k.publicKey)).toEqual(pems);
+    expect(merged[0]).toBe(held[0]);
+    expect(PublicKeys.covers(merged, new Date(START_3.getTime() + DAY)))
+      .toBe(true);
+  });
+
+  test('the answer copy of a start replaces the held entry, so endsAt is gained', async () => {
+    const { pems, json } = await schedule();
+    const held = PublicKeys.fromList(json);
+    const answer = PublicKeys.fromList([
+      published(START_3, START_4, pems[2])
+    ]);
+    const merged = PublicKeys.merge(held, answer);
+    expect(merged).toHaveLength(3);
+    expect(merged[2]).toBe(answer[0]);
+    expect(merged[2].endsAt).toEqual(START_4);
+    expect(merged.slice(0, 2)).toEqual(held.slice(0, 2));
+  });
+
+  test('takes a replacement key and the earlier end of the key it replaces', async () => {
+    const { pems } = await schedule();
+    const replacementPem = await publicPemOf(await generateKeyPair());
+    const replacedAt = new Date(START_2.getTime() + 3 * DAY);
+    const merged = PublicKeys.merge(startedList(pems), PublicKeys.fromList([
+      published(START_2, replacedAt, pems[1]),
+      published(replacedAt, START_3, replacementPem)
+    ]));
+    expect(merged.map((k) => k.startsAt))
+      .toEqual([START_1, START_2, replacedAt]);
+    expect(merged[1].endsAt).toEqual(replacedAt);
+    expect(PublicKeys.inForceAt(merged, new Date(replacedAt.getTime() - 1))
+      .publicKey).toBe(pems[1]);
+    expect(PublicKeys.inForceAt(merged, replacedAt).publicKey)
+      .toBe(replacementPem);
+    expect(PublicKeys.covers(merged, new Date(START_3.getTime() - HOUR)))
+      .toBe(true);
+  });
+
+  test('an empty answer leaves the entries held', async () => {
+    const { pems } = await schedule();
+    const held = startedList(pems);
+    expect(PublicKeys.merge(held, [])).toEqual(held);
+    expect(PublicKeys.merge([], held)).toEqual(held);
+  });
+
+  test('changes neither list, and the result is frozen, oldest first', async () => {
+    const { json } = await schedule();
+    const read = PublicKeys.fromList(json);
+    const held = [read[2], read[0]];
+    const answer = [read[1]];
+    const merged = PublicKeys.merge(held, answer);
+    expect(held).toEqual([read[2], read[0]]);
+    expect(answer).toEqual([read[1]]);
+    expect(merged).toEqual(read);
+    expect(Object.isFrozen(merged)).toBe(true);
+  });
+
+  test('refuses a list that was not read first', async () => {
+    const { json } = await schedule();
+    const keys = PublicKeys.fromList(json);
+    expect(() => PublicKeys.merge(keys, json)).toThrow(TypeError);
+    expect(() => PublicKeys.merge(json, keys)).toThrow(TypeError);
+    expect(() => PublicKeys.merge(null, keys)).toThrow(TypeError);
+  });
+});
+
 describe('PublicKeys is part of the published surface', () => {
   test('is exported from the package entry point and frozen', () => {
     expect(Object.isFrozen(PublicKeys)).toBe(true);
     for (const name of [
-      'fromList', 'createdAt', 'inForceAt', 'inForceFor', 'candidatesFor'
+      'fromList', 'createdAt', 'inForceAt', 'inForceFor', 'candidatesFor',
+      'covers', 'merge'
     ]) {
       expect(typeof PublicKeys[name]).toBe('function');
     }

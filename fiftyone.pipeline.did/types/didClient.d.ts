@@ -10,13 +10,20 @@ export type FetchFunction = (url: string, init: object) => Promise<{
 }>;
 /**
  * A published signing key and the moment it came into force. A key stays in
- * force until the next key starts.
+ * force until its `endsAt`, or until the next key starts where the entry
+ * carries no `endsAt`.
  */
 export type PublicKeyEntry = {
     /**
      * when the key came, or comes, into force
      */
     startsAt: Date;
+    /**
+     * when the key stops being in force, where the
+     * list gives it. A key can be replaced before then, and the list then gives
+     * the earlier moment.
+     */
+    endsAt?: Date;
     /**
      * the key in SPKI PEM form
      */
@@ -81,9 +88,13 @@ export type DidClientOptions = {
  */
 /**
  * A published signing key and the moment it came into force. A key stays in
- * force until the next key starts.
+ * force until its `endsAt`, or until the next key starts where the entry
+ * carries no `endsAt`.
  * @typedef {object} PublicKeyEntry
  * @property {Date} startsAt when the key came, or comes, into force
+ * @property {Date} [endsAt] when the key stops being in force, where the
+ * list gives it. A key can be replaced before then, and the list then gives
+ * the earlier moment.
  * @property {string} publicKey the key in SPKI PEM form
  */
 /**
@@ -139,8 +150,10 @@ export class DidClient {
     _now: () => number;
     /** @type {PublicKeyEntry[] | null} */
     _keys: PublicKeyEntry[] | null;
-    /** @type {number | null} */
+    /** @type {number | null} when the whole list was last fetched */
     _fetchedAt: number | null;
+    /** @type {number | null} when the last limited fetch started */
+    _refetchedAt: number | null;
     /** @type {Promise<PublicKeyEntry[]> | null} */
     _pending: Promise<PublicKeyEntry[]> | null;
     /** @returns {string} the API base every request is built on */
@@ -148,22 +161,25 @@ export class DidClient {
     /** @returns {string} the resource key the requests carry */
     get resourceKey(): string;
     /**
-     * The published signing keys, oldest first, fetched on first use and
-     * then served from the cache until the list is a day old. Keys are
-     * published up to three months ahead of their start, so the list holds
-     * entries that have not started yet.
+     * The published signing keys, oldest first. The whole list is fetched on
+     * first use and again once it is a day old. The cloud publishes a key
+     * only from shortly before its period starts, so the keys from the newest
+     * start held onwards are also fetched when an identifier's date reaches
+     * the end of the list held (see {@link DidClient#publicKeyFor}). Every
+     * answer is merged in by start, so no older key is dropped.
      * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
      */
     publicKeys(): Promise<PublicKeyEntry[]>;
     /**
      * The key in force when the identifier was created, being the entry whose
-     * start is latest on or before the identifier's date. The list is fetched
-     * again, once, before answering when no entry covers the date, when the
-     * date is later than the newest start held, or when the list is more than
-     * a day old.
+     * start is latest on or before the identifier's date, unless that entry
+     * has ended. Before answering, the whole list is fetched when it is more
+     * than a day old, or else the keys from the newest start held onwards
+     * when {@link PublicKeys.covers} says the list does not answer for the
+     * date, at most once a minute.
      * @param {FodId | string} fodId the identifier, or its base64
-     * @returns {Promise<PublicKeyEntry | null>} the key, or null when the
-     * date precedes every published key
+     * @returns {Promise<PublicKeyEntry | null>} the key, or null when no key
+     * held covers the date
      */
     publicKeyFor(fodId: FodId | string): Promise<PublicKeyEntry | null>;
     /**
@@ -173,7 +189,12 @@ export class DidClient {
      * for its type (a longer payload carries a creator context and is
      * accepted), and the signature must verify against the key in force at
      * the identifier's date or, near a period boundary, the neighbouring key.
-     * No earlier key is tried.
+     * No earlier key is tried. Keys are fetched as
+     * {@link DidClient#publicKeyFor} says. A key can be replaced before its
+     * `endsAt`, so where no key held verifies the signature and nothing was
+     * fetched for this check, the keys from the start of the one in force at
+     * the identifier's date onwards are fetched, at most once a minute, and
+     * the check made once more.
      * @param {FodId | string} fodId the identifier, or its base64
      * @returns {Promise<boolean>} true when a candidate key verifies it
      */
@@ -231,39 +252,60 @@ export class DidClient {
      */
     redeem(fodId: FodId | string, result: string, challenge?: string): Promise<RedeemResult>;
     /**
-     * The key list to select from for the given date, fetched again once
-     * where the rule in {@link DidClient#publicKeyFor} calls for it and the
-     * list was not just fetched.
+     * The key list to select from for the given date, after the fetch
+     * {@link DidClient#_fetchFor} calls for, where it calls for one.
      * @param {Date} date the identifier's date
      * @returns {Promise<PublicKeyEntry[]>} the keys to select from
      * @private
      */
     private _keysFor;
     /**
-     * Whether the held list should be fetched again before selecting for the
-     * date.
-     * @param {PublicKeyEntry[]} keys the held list, oldest first
+     * The fetch a question about the date needs first, or null where the list
+     * held answers it. With nothing held, or a list more than a day old, that
+     * is the whole list. Where {@link PublicKeys.covers} says the list does
+     * not answer for the date, it is the keys from the newest start held
+     * onwards, within the limit {@link DidClient#_refetch} applies.
      * @param {Date} date the identifier's date
-     * @returns {boolean} true to fetch again
+     * @returns {Promise<PublicKeyEntry[]> | null} the fetch, or null
      * @private
      */
-    private _needsRefetch;
+    private _fetchFor;
     /**
-     * @returns {boolean} whether the held list is missing or over a day old
+     * A fetch of the keys from the given start onwards, made because the list
+     * held may lack a key a check needs. It shares a fetch already under way,
+     * and otherwise starts at most once a minute, answering null where that
+     * limit stops it.
+     * @param {Date | null} since the start to fetch from, or null for the
+     * whole list
+     * @returns {Promise<PublicKeyEntry[]> | null} the fetch, or null
+     * @private
+     */
+    private _refetch;
+    /**
+     * @returns {boolean} whether the list is missing or the whole list was
+     * last fetched over a day ago
      * @private
      */
     private _stale;
     /**
-     * Fetches the key list, sharing one request between concurrent callers.
-     * @returns {Promise<PublicKeyEntry[]>} the fresh list
+     * Fetches keys and merges the answer into the list held, sharing one
+     * request between concurrent callers. Only a fetch of the whole list
+     * resets the list's age.
+     * @param {Date | null} since the start to fetch from, or null for the
+     * whole list
+     * @returns {Promise<PublicKeyEntry[]>} the list held after the merge
      * @private
      */
     private _refresh;
     /**
-     * GET id/key/{resource} and read each entry's start and public key
-     * through {@link PublicKeys.fromList}, so `startsAt` is read where
-     * present and `created` otherwise, and `weekStart` is ignored.
-     * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
+     * GET id/key/{resource} and read each entry through
+     * {@link PublicKeys.fromList}, so `startsAt` is read where present and
+     * `created` otherwise, `endsAt` is kept, and `weekStart` is ignored. A
+     * start given is sent as `datetime`, so the cloud answers with the keys
+     * that start then or later only.
+     * @param {Date | null} since the start to fetch from, or null for the
+     * whole list
+     * @returns {Promise<PublicKeyEntry[]>} the answer, oldest start first
      * @private
      */
     private _fetchKeys;

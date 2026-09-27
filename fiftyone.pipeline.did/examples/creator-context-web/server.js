@@ -59,7 +59,10 @@
  * two, verify-full from the page and redeem from this server, so a
  * browser-based context check is two uses every time, on top of the
  * one use that created the identifiers. The public key list the offline
- * signature check needs is fetched once and cached for a day.
+ * signature check needs is one use each time it is fetched, which is on
+ * first use, when the list is a day old, and at most once a minute when a
+ * 51Did is dated close to the end of the list or past it, or fails its
+ * signature check.
  *
  * Environment variables:
  *   _51DEGREES_RESOURCE_KEY, or RESOURCE_KEY. Required.
