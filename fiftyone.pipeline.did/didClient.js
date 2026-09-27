@@ -23,6 +23,7 @@
 const FodId = require('./fodId');
 const layout = require('./internal/layout');
 const IdType = require('./idType');
+const PublicKeys = require('./publicKeys');
 const packageVersion = require('./package.json').version;
 
 /**
@@ -34,14 +35,22 @@ const DEFAULT_ENDPOINT = 'https://cloud.51degrees.com/api/v4/';
 /** Sent with every request so the cloud can tell which package called. */
 const USER_AGENT = 'fiftyone.pipeline.did/' + packageVersion;
 
-/** The OWID date field counts minutes from this moment. */
-const OWID_EPOCH_MS = Date.UTC(2020, 0, 1);
 const MINUTE_MS = 60 * 1000;
 
-const BOUNDARY_TOLERANCE_MS = 15 * MINUTE_MS;
-
-/** A cached key list older than this is fetched again before use. */
+/**
+ * The whole key list is fetched again before use once it is older than
+ * this, which bounds how long a key replaced before its `endsAt` is still
+ * trusted.
+ */
 const KEY_LIST_MAX_AGE_MS = 24 * 60 * MINUTE_MS;
+
+/**
+ * The shortest gap between fetches made because the list held does not
+ * cover an identifier's date or a signature failed with every key held, so
+ * an identifier dated where no key is published yet cannot make every
+ * check call the cloud. Fetches of the whole list are not counted.
+ */
+const REFETCH_INTERVAL_MS = MINUTE_MS;
 
 /** The only envelope version the cloud signs and verifies. */
 const SUPPORTED_VERSION = 3;
@@ -344,9 +353,13 @@ class RedeemResult {
 
 /**
  * A published signing key and the moment it came into force. A key stays in
- * force until the next key starts.
+ * force until its `endsAt`, or until the next key starts where the entry
+ * carries no `endsAt`.
  * @typedef {object} PublicKeyEntry
  * @property {Date} startsAt when the key came, or comes, into force
+ * @property {Date} [endsAt] when the key stops being in force, where the
+ * list gives it. A key can be replaced before then, and the list then gives
+ * the earlier moment.
  * @property {string} publicKey the key in SPKI PEM form
  */
 
@@ -423,8 +436,10 @@ class DidClient {
       : () => Date.now();
     /** @type {PublicKeyEntry[] | null} */
     this._keys = null;
-    /** @type {number | null} */
+    /** @type {number | null} when the whole list was last fetched */
     this._fetchedAt = null;
+    /** @type {number | null} when the last limited fetch started */
+    this._refetchedAt = null;
     /** @type {Promise<PublicKeyEntry[]> | null} */
     this._pending = null;
   }
@@ -440,34 +455,37 @@ class DidClient {
   }
 
   /**
-   * The published signing keys, oldest first, fetched on first use and
-   * then served from the cache until the list is a day old. Keys are
-   * published up to three months ahead of their start, so the list holds
-   * entries that have not started yet.
+   * The published signing keys, oldest first. The whole list is fetched on
+   * first use and again once it is a day old. The cloud publishes a key
+   * only from shortly before its period starts, so the keys from the newest
+   * start held onwards are also fetched when an identifier's date reaches
+   * the end of the list held (see {@link DidClient#publicKeyFor}). Every
+   * answer is merged in by start, so no older key is dropped.
    * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
    */
   publicKeys () {
     if (this._keys !== null && !this._stale()) {
       return Promise.resolve(this._keys);
     }
-    return this._refresh();
+    return this._refresh(null);
   }
 
   /**
    * The key in force when the identifier was created, being the entry whose
-   * start is latest on or before the identifier's date. The list is fetched
-   * again, once, before answering when no entry covers the date, when the
-   * date is later than the newest start held, or when the list is more than
-   * a day old.
+   * start is latest on or before the identifier's date, unless that entry
+   * has ended. Before answering, the whole list is fetched when it is more
+   * than a day old, or else the keys from the newest start held onwards
+   * when {@link PublicKeys.covers} says the list does not answer for the
+   * date, at most once a minute.
    * @param {FodId | string} fodId the identifier, or its base64
-   * @returns {Promise<PublicKeyEntry | null>} the key, or null when the
-   * date precedes every published key
+   * @returns {Promise<PublicKeyEntry | null>} the key, or null when no key
+   * held covers the date
    */
   async publicKeyFor (fodId) {
     const id = asFodId(fodId);
-    const date = dateOf(id);
+    const date = PublicKeys.createdAt(id);
     const keys = await this._keysFor(date);
-    return inForceAt(keys, date);
+    return PublicKeys.inForceAt(keys, date);
   }
 
   /**
@@ -477,7 +495,12 @@ class DidClient {
    * for its type (a longer payload carries a creator context and is
    * accepted), and the signature must verify against the key in force at
    * the identifier's date or, near a period boundary, the neighbouring key.
-   * No earlier key is tried.
+   * No earlier key is tried. Keys are fetched as
+   * {@link DidClient#publicKeyFor} says. A key can be replaced before its
+   * `endsAt`, so where no key held verifies the signature and nothing was
+   * fetched for this check, the keys from the start of the one in force at
+   * the identifier's date onwards are fetched, at most once a minute, and
+   * the check made once more.
    * @param {FodId | string} fodId the identifier, or its base64
    * @returns {Promise<boolean>} true when a candidate key verifies it
    */
@@ -500,18 +523,23 @@ class DidClient {
     if (!payloadLengthValid(id)) {
       return { valid: false, reason: SignatureReason.LENGTH };
     }
-    const date = dateOf(id);
-    const keys = await this._keysFor(date);
-    const candidates = candidatesForDate(keys, date);
-    if (candidates.length === 0) {
-      return { valid: false, reason: SignatureReason.NO_KEY };
+    const date = PublicKeys.createdAt(id);
+    const fetch = this._fetchFor(date);
+    if (fetch !== null) {
+      return checkAgainst(id, await fetch);
     }
-    for (const key of candidates) {
-      if (await id.verify(key.publicKey)) {
-        return { valid: true, reason: SignatureReason.VERIFIED };
-      }
+    const held = this._keys;
+    const check = await checkAgainst(id, held);
+    if (check.reason !== SignatureReason.SIGNATURE) {
+      return check;
     }
-    return { valid: false, reason: SignatureReason.SIGNATURE };
+    const retry = this._refetch(startInForce(held, date));
+    if (retry !== null) {
+      return checkAgainst(id, await retry);
+    }
+    // The limit held the fetch back. Where another caller's fetch has
+    // changed the list since the first check, check once more against it.
+    return this._keys === held ? check : checkAgainst(id, this._keys);
   }
 
   /**
@@ -623,43 +651,68 @@ class DidClient {
   }
 
   /**
-   * The key list to select from for the given date, fetched again once
-   * where the rule in {@link DidClient#publicKeyFor} calls for it and the
-   * list was not just fetched.
+   * The key list to select from for the given date, after the fetch
+   * {@link DidClient#_fetchFor} calls for, where it calls for one.
    * @param {Date} date the identifier's date
    * @returns {Promise<PublicKeyEntry[]>} the keys to select from
    * @private
    */
   async _keysFor (date) {
-    const fetchedBefore = this._fetchedAt;
-    let keys = await this.publicKeys();
-    if (this._fetchedAt === fetchedBefore && this._needsRefetch(keys, date)) {
-      keys = await this._refresh();
-    }
-    return keys;
+    const fetch = this._fetchFor(date);
+    return fetch === null ? this._keys : fetch;
   }
 
   /**
-   * Whether the held list should be fetched again before selecting for the
-   * date.
-   * @param {PublicKeyEntry[]} keys the held list, oldest first
+   * The fetch a question about the date needs first, or null where the list
+   * held answers it. With nothing held, or a list more than a day old, that
+   * is the whole list. Where {@link PublicKeys.covers} says the list does
+   * not answer for the date, it is the keys from the newest start held
+   * onwards, within the limit {@link DidClient#_refetch} applies.
    * @param {Date} date the identifier's date
-   * @returns {boolean} true to fetch again
+   * @returns {Promise<PublicKeyEntry[]> | null} the fetch, or null
    * @private
    */
-  _needsRefetch (keys, date) {
-    if (inForceAt(keys, date) === null) {
-      return true;
+  _fetchFor (date) {
+    if (this._keys === null || this._stale()) {
+      return this._refresh(null);
     }
-    const newestStart = keys[keys.length - 1].startsAt;
-    if (date.getTime() > newestStart.getTime()) {
-      return true;
+    if (PublicKeys.covers(this._keys, date)) {
+      return null;
     }
-    return this._stale();
+    const keys = this._keys;
+    return this._refetch(
+      keys.length === 0 ? null : keys[keys.length - 1].startsAt);
   }
 
   /**
-   * @returns {boolean} whether the held list is missing or over a day old
+   * A fetch of the keys from the given start onwards, made because the list
+   * held may lack a key a check needs. It shares a fetch already under way,
+   * and otherwise starts at most once a minute, answering null where that
+   * limit stops it.
+   * @param {Date | null} since the start to fetch from, or null for the
+   * whole list
+   * @returns {Promise<PublicKeyEntry[]> | null} the fetch, or null
+   * @private
+   */
+  _refetch (since) {
+    if (this._pending !== null) {
+      return this._pending;
+    }
+    const now = this._now();
+    const elapsed = this._refetchedAt === null
+      ? null
+      : now - this._refetchedAt;
+    // A clock set back is no reason to stop fetching.
+    if (elapsed !== null && elapsed >= 0 && elapsed < REFETCH_INTERVAL_MS) {
+      return null;
+    }
+    this._refetchedAt = now;
+    return this._refresh(since);
+  }
+
+  /**
+   * @returns {boolean} whether the list is missing or the whole list was
+   * last fetched over a day ago
    * @private
    */
   _stale () {
@@ -668,17 +721,25 @@ class DidClient {
   }
 
   /**
-   * Fetches the key list, sharing one request between concurrent callers.
-   * @returns {Promise<PublicKeyEntry[]>} the fresh list
+   * Fetches keys and merges the answer into the list held, sharing one
+   * request between concurrent callers. Only a fetch of the whole list
+   * resets the list's age.
+   * @param {Date | null} since the start to fetch from, or null for the
+   * whole list
+   * @returns {Promise<PublicKeyEntry[]>} the list held after the merge
    * @private
    */
-  _refresh () {
+  _refresh (since) {
     if (this._pending === null) {
-      this._pending = this._fetchKeys()
-        .then((keys) => {
-          this._keys = keys;
-          this._fetchedAt = this._now();
-          return keys;
+      this._pending = this._fetchKeys(since)
+        .then((answer) => {
+          this._keys = this._keys === null
+            ? answer
+            : PublicKeys.merge(this._keys, answer);
+          if (since === null) {
+            this._fetchedAt = this._now();
+          }
+          return this._keys;
         })
         .finally(() => {
           this._pending = null;
@@ -688,15 +749,24 @@ class DidClient {
   }
 
   /**
-   * GET id/key/{resource} and read each entry's start and public key.
-   * `startsAt` is read where present and `created` otherwise. Both are
-   * supported start fields in key-list responses. `weekStart` is ignored.
-   * @returns {Promise<PublicKeyEntry[]>} the keys, oldest start first
+   * GET id/key/{resource} and read each entry through
+   * {@link PublicKeys.fromList}, so `startsAt` is read where present and
+   * `created` otherwise, `endsAt` is kept, and `weekStart` is ignored. A
+   * start given is sent as `datetime`, so the cloud answers with the keys
+   * that start then or later only.
+   * @param {Date | null} since the start to fetch from, or null for the
+   * whole list
+   * @returns {Promise<PublicKeyEntry[]>} the answer, oldest start first
    * @private
    */
-  async _fetchKeys () {
-    const url = this._endpoint + 'id/key/' +
+  async _fetchKeys (since) {
+    let url = this._endpoint + 'id/key/' +
       encodeURIComponent(this._resourceKey);
+    if (since !== null) {
+      // ISO 8601 UTC to the second, as the cloud writes it.
+      url += '?datetime=' + encodeURIComponent(
+        since.toISOString().replace(/\.\d+Z$/, 'Z'));
+    }
     const response = await this._fetch(url, {
       method: 'GET',
       headers: { 'User-Agent': USER_AGENT }
@@ -713,19 +783,11 @@ class DidClient {
         'Public keys answered with a body that is not a JSON array: ' +
         body, response.status, body);
     }
-    const keys = parsed.map((entry) => {
-      const start = entry && (entry.startsAt || entry.created);
-      const startsAt = typeof start === 'string' ? new Date(start) : null;
-      if (startsAt === null || isNaN(startsAt.getTime()) ||
-        typeof entry.publicKey !== 'string') {
-        throw new DidClientError(
-          'Public keys entry lacks a start or a publicKey: ' +
-          JSON.stringify(entry), response.status, body);
-      }
-      return Object.freeze({ startsAt, publicKey: entry.publicKey });
-    });
-    keys.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-    return Object.freeze(keys);
+    try {
+      return PublicKeys.fromList(parsed);
+    } catch (error) {
+      throw new DidClientError(error.message, response.status, body);
+    }
   }
 }
 
@@ -799,15 +861,6 @@ function ensureEncodedLength (value) {
 }
 
 /**
- * The identifier's creation moment as a Date.
- * @param {FodId} fodId the identifier
- * @returns {Date} the moment the envelope says it was created
- */
-function dateOf (fodId) {
-  return new Date(OWID_EPOCH_MS + fodId.date * MINUTE_MS);
-}
-
-/**
  * Whether the payload is at least the base length for its type, being five
  * header bytes plus a 32 byte match key, or 16 for a Random identifier.
  * Anything beyond the base is a creator context section, whose exact
@@ -827,45 +880,43 @@ function payloadLengthValid (fodId) {
 }
 
 /**
- * The entry in force at the moment, being the newest whose start has
- * passed, or null when the moment precedes every entry.
- * @param {PublicKeyEntry[]} keys the schedule, in any order
- * @param {Date} at the moment
- * @returns {PublicKeyEntry | null} the entry in force
+ * The start to fetch from after a signature fails with every key held,
+ * being the start of the newest key held that starts on or before the
+ * identifier's date, so the answer carries that key's entry with any
+ * earlier end and any replacement that starts in its period. Where no key
+ * held starts that early, the oldest start held.
+ * @param {PublicKeyEntry[]} keys the list held, oldest first
+ * @param {Date} date the identifier's date
+ * @returns {Date | null} the start, or null for an empty list
  */
-function inForceAt (keys, at) {
-  let best = null;
+function startInForce (keys, date) {
+  let since = keys.length === 0 ? null : keys[0].startsAt;
   for (const key of keys) {
-    if (key.startsAt.getTime() > at.getTime()) {
-      continue;
-    }
-    if (best === null || key.startsAt.getTime() > best.startsAt.getTime()) {
-      best = key;
+    if (key.startsAt.getTime() <= date.getTime()) {
+      since = key.startsAt;
     }
   }
-  return best;
+  return since;
 }
 
 /**
- * The entries that may have signed something created at the moment, best
- * first: the entry in force, then the entry in force a tolerance earlier
- * and the entry in force a tolerance later where those differ. Not every
- * earlier entry.
- * @param {PublicKeyEntry[]} keys the schedule, in any order
- * @param {Date} at the moment
- * @returns {PublicKeyEntry[]} the entries to try, best first
+ * Checks the signature against the entries that may have signed the
+ * identifier, chosen from the list by {@link PublicKeys.candidatesFor}.
+ * @param {FodId} fodId the identifier
+ * @param {PublicKeyEntry[]} keys the list to choose from
+ * @returns {Promise<SignatureCheck>} the answer and its reason
  */
-function candidatesForDate (keys, at) {
-  const candidates = [];
-  const add = (entry) => {
-    if (entry !== null && candidates.indexOf(entry) < 0) {
-      candidates.push(entry);
+async function checkAgainst (fodId, keys) {
+  const candidates = PublicKeys.candidatesFor(keys, fodId);
+  if (candidates.length === 0) {
+    return { valid: false, reason: SignatureReason.NO_KEY };
+  }
+  for (const key of candidates) {
+    if (await fodId.verify(key.publicKey)) {
+      return { valid: true, reason: SignatureReason.VERIFIED };
     }
-  };
-  add(inForceAt(keys, at));
-  add(inForceAt(keys, new Date(at.getTime() - BOUNDARY_TOLERANCE_MS)));
-  add(inForceAt(keys, new Date(at.getTime() + BOUNDARY_TOLERANCE_MS)));
-  return candidates;
+  }
+  return { valid: false, reason: SignatureReason.SIGNATURE };
 }
 
 /**

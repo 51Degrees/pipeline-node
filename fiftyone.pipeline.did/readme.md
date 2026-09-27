@@ -393,7 +393,9 @@ const sameMatchKey = Buffer.from(a.matchKey).equals(Buffer.from(b.matchKey));
 `DidClient` handles every manipulation of a 51Did a server needs against the
 cloud, so server code never builds a cloud URL or handles a key itself. One
 instance serves a whole server. It needs Node 18 or later for the built-in
-`fetch`, or a `fetch` function passed in.
+`fetch`, or a `fetch` function passed in. A caller that holds the published
+key list already, and fetches it on its own terms, chooses a key with
+`PublicKeys` instead, described under step 2a below.
 
 ```js
 const { FodId, DidClient } = require('fiftyone.pipeline.did');
@@ -437,26 +439,102 @@ const fodId = read.value;
 ```
 
 **2. Verify the signature offline.** The client fetches the published signing
-public keys from the cloud once, caches them for a day, and picks the key in
-force when the identifier was created, being the entry whose start is latest
-on or before the identifier's date (a key stays in force until the next one
-starts, and keys are published up to three months ahead). Near a period
-boundary the neighbouring key is tried as well, and no earlier key is tried.
-The envelope version must be the one the cloud signs and the payload at least
-the base length for its type.
+public keys from the cloud and picks the key in force when the identifier was
+created, being the entry whose start is latest on or before the identifier's
+date (a key stays in force until its `endsAt`, or until the next one starts
+where the cloud sends no `endsAt`). Near a period boundary the neighbouring
+key is tried as well, and no earlier key is tried. The envelope version must
+be the one the cloud signs and the payload at least the base length for its
+type.
+
+The cloud publishes each key only from shortly before its period starts, so
+the client verifies offline until the newest key it holds ends. It fetches the
+whole list on first use and again once the list is a day old. In between, it
+fetches the keys from the newest start it holds onwards for an identifier
+dated close to the end of the list or past it, and the keys from the start of
+the key in force at the identifier's date onwards when no key it holds
+verifies a signature, because a key can be replaced before its `endsAt`. Each
+answer is merged into the list, so no older key is dropped, and those two
+reasons cause at most one fetch a minute.
 
 ```js
 const valid = await client.verifySignature(fodId);        // boolean
 const detail = await client.verifySignatureDetailed(fodId);
-// { valid: false, reason: 'nokey' } when no published key covers the date
-const keys = await client.publicKeys();     // [{ startsAt: Date, publicKey: PEM }]
+// { valid: false, reason: 'nokey' } when no key held covers the date
+const keys = await client.publicKeys();
+// [{ startsAt: Date, endsAt: Date, publicKey: PEM }], endsAt where sent
 const key = await client.publicKeyFor(fodId); // the entry in force, or null
 ```
 
 `verifySignatureDetailed` answers `{ valid: false, reason: 'signature' }` only
-when a candidate key was tried and the signature did not match. A date no
-published key covers is `'nokey'`, and a key list that could not be fetched
+when every candidate key was tried and none matched. Where that happens with
+the list held, the client fetches once more, at most once a minute, and checks
+again before answering. A date no key held covers, such as one past the end of
+every published key, is `'nokey'`, and a key list that could not be fetched
 rejects with a `DidClientError`, so an outage never reads as a forgery.
+
+**2a. Choose the key from a list you already hold.** The rule the client
+applies is offered on its own as `PublicKeys`, for a caller that holds the
+published list already and fetches it on its own terms, for example a page
+that keeps the list between visits and only asks the cloud for keys from the
+newest start it holds onwards. Such a caller chooses the same key the client
+would and never works the rule out for itself. Nothing in `PublicKeys`
+fetches or checks a signature.
+
+```js
+const { FodId, PublicKeys } = require('fiftyone.pipeline.did');
+
+// The list exactly as the id/key/{resource} endpoint answered it, or as it
+// was stored. Read once into frozen entries, oldest start first.
+let keys = PublicKeys.fromList(JSON.parse(body));
+
+const created = PublicKeys.createdAt(fodId);   // Date, from the envelope date
+
+// Fetch first when the list may not reach the identifier's date. The
+// request is your own, to id/key/{resource} with the newest startsAt held
+// as ?datetime=, so only that entry and later ones come back. Merging keeps
+// every older entry.
+if (!PublicKeys.covers(keys, created)) {
+  keys = PublicKeys.merge(keys, PublicKeys.fromList(await fetchKeysSince(keys)));
+}
+
+const key = PublicKeys.inForceFor(keys, fodId); // the entry in force, or null
+const atMoment = PublicKeys.inForceAt(keys, new Date('2026-08-10T00:00:00Z'));
+
+// The entries to try in order, being the one in force and, within fifteen
+// minutes of a period boundary, the neighbour. Empty when no entry covers
+// the date. No earlier key is ever tried.
+for (const candidate of PublicKeys.candidatesFor(keys, fodId)) {
+  if (await fodId.verify(candidate.publicKey)) {
+    // Genuine.
+    break;
+  }
+}
+```
+
+`fromList` reads `startsAt`, or `created` where an entry carries no
+`startsAt`, `endsAt` where an entry carries it, and `publicKey`, and ignores
+everything else. It throws a `TypeError` for a value that is not a list, an
+entry that lacks a start or a key, or an `endsAt` that is not a date after the
+entry's start, so nothing from such an answer should be merged. `inForceFor`,
+`candidatesFor` and `createdAt` take a `FodId` or its base64 in either
+alphabet, and a string that does not read as a 51Did throws the reader's own
+error, as `FodId.fromBase64` does.
+
+`covers` is false when the list must be fetched before it can answer for a
+moment, which is when the moment is past the end of the list or close enough
+to it that the next key may have signed the identifier. The end is the newest
+entry's `endsAt`, or its start where the cloud sent no `endsAt`. Fetch for
+that reason at most once a minute, so a 51Did dated where no key is published
+yet cannot make every check call the cloud. `merge` adds each entry of the
+answer, or puts it in place of the held entry with the same start, and never
+drops an older entry, because an old 51Did verifies against the key of its own
+period. A key can be replaced before its `endsAt`, so when no candidate
+verifies, fetch the keys from the start of the key in force at the
+identifier's date onwards, within the same limit, merge them in and try the
+candidates once more before treating the signature as failed. Fetch the whole
+list, with no `datetime`, at least once a day as well and merge it in, which
+bounds how long a replaced key is still trusted.
 
 **3. Verify the signature through the cloud.** The open `verify` endpoint,
 one use against the resource key and no licence key needed. A value that does
@@ -670,7 +748,9 @@ behind the resource key. Checking a 51Did from the browser makes two,
 verify-full from the page and redeem from the server, so a browser-based
 context check is two uses every time. Checking only the signature with
 `verify` is one use. The public key list the offline check needs is one use
-when first fetched and then served from the cache for a day.
+each time it is fetched, which is on first use, when the list is a day old,
+and at most once a minute when a 51Did is dated close to the end of the list
+or past it, or fails its signature check.
 
 ## Tests
 

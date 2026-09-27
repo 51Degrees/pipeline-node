@@ -24,6 +24,7 @@ const FodId = require('./fodId');
 const FodIdParseError = require('./fodIdParseError');
 const IdType = require('./idType');
 const Usage = require('./usage');
+const PublicKeys = require('./publicKeys');
 const {
   DidClient,
   RedeemResult,
@@ -42,6 +43,7 @@ module.exports = {
   FodIdParseError,
   IdType,
   Usage,
+  PublicKeys,
   DidClient,
   RedeemResult,
   ContextResult,
