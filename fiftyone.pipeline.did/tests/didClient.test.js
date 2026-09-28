@@ -193,6 +193,45 @@ function datetimeOf (call) {
   return value === null ? null : new Date(value);
 }
 
+/**
+ * Runs the function with no `process` global, as a page has none, and puts
+ * the global back once the function returns. A request the function starts
+ * is made before the function returns, so its headers are chosen without
+ * the global.
+ * @param {function(): any} fn the function to run
+ * @returns {any} what the function returned
+ */
+function withoutProcess (fn) {
+  const saved = globalThis.process;
+  globalThis.process = undefined;
+  try {
+    return fn();
+  } finally {
+    globalThis.process = saved;
+  }
+}
+
+/**
+ * A fetch stand-in that refuses to run as a method of anything but the
+ * window, as a browser's fetch does, and otherwise answers from a handler.
+ * @param {function(string, object, number): object} handler given the URL,
+ * the init and the call number, returns a response
+ * @returns {Function} the fetch function, with a `calls` array
+ */
+function windowFetch (handler) {
+  const calls = [];
+  const fetch = async function (url, init) {
+    if (this !== undefined && this !== globalThis) {
+      throw new TypeError('Illegal invocation');
+    }
+    const call = { url: String(url), init: init || {} };
+    calls.push(call);
+    return handler(call.url, call.init, calls.length);
+  };
+  fetch.calls = calls;
+  return fetch;
+}
+
 describe('DidClient construction', () => {
   const saved = process.env.FOD_CLOUD_API_URL;
   afterEach(() => {
@@ -233,6 +272,102 @@ describe('DidClient construction', () => {
   test('a missing fetch is refused', () => {
     expect(() => new DidClient({ resourceKey: RESOURCE, fetch: 'no' }))
       .toThrow(TypeError);
+  });
+});
+
+// A page builds a client with only the resource key. A browser has no
+// process global to read an endpoint from, runs its fetch only as a
+// function of the window, and sends its own User-Agent, where one set by
+// the client would make every request need a preflight.
+describe('DidClient in a browser', () => {
+  const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+  const saved = process.env.FOD_CLOUD_API_URL;
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.FOD_CLOUD_API_URL;
+    } else {
+      process.env.FOD_CLOUD_API_URL = saved;
+    }
+  });
+
+  /**
+   * A fetch stand-in answering the key, verify and redeem routes.
+   * @param {object[]} json the published key list
+   * @returns {Function} the fetch function, with a `calls` array
+   */
+  function cloudFetch (json) {
+    return fakeFetch((url) => {
+      if (url.indexOf('id/key/') >= 0) {
+        return response(200, json);
+      }
+      if (url.indexOf('id/verify/') >= 0) {
+        return response(200, { valid: true });
+      }
+      return response(200, { signature: 'verified', context: 'verified' });
+    });
+  }
+
+  test('the endpoint defaults to the public cloud where there is no process global', () => {
+    process.env.FOD_CLOUD_API_URL = 'https://other.example/api/v4';
+    const client = withoutProcess(() =>
+      new DidClient({ resourceKey: RESOURCE, fetch: fakeFetch(() => null) }));
+    expect(client.endpoint).toBe('https://cloud.51degrees.com/api/v4/');
+  });
+
+  test('the global fetch is called as a function of the window, never as a method of the client', async () => {
+    const { json } = await schedule();
+    const fetch = windowFetch(() => response(200, json));
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+    globalThis.fetch = fetch;
+    try {
+      const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT });
+      await expect(client.publicKeys()).resolves.toHaveLength(3);
+      // A fetch passed in is called the same way.
+      const passed = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+      await expect(passed.publicKeys()).resolves.toHaveLength(3);
+      expect(fetch.calls).toHaveLength(2);
+    } finally {
+      if (descriptor === undefined) {
+        delete globalThis.fetch;
+      } else {
+        Object.defineProperty(globalThis, 'fetch', descriptor);
+      }
+    }
+  });
+
+  test('no User-Agent header is sent, so every request is a simple one', async () => {
+    const { json } = await schedule();
+    const fetch = cloudFetch(json);
+    const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+    await withoutProcess(() => Promise.all([
+      client.publicKeys(),
+      client.verify(fod),
+      client.redeem(fod, 'sealed', 'challenge')
+    ]));
+    expect(fetch.calls.map((call) => call.init.headers)).toEqual([
+      {},
+      {},
+      { 'Content-Type': 'application/x-www-form-urlencoded' }
+    ]);
+  });
+
+  test('on Node every request names the package in User-Agent', async () => {
+    const { json } = await schedule();
+    const fetch = cloudFetch(json);
+    const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+    await Promise.all([
+      client.publicKeys(),
+      client.verify(fod),
+      client.redeem(fod, 'sealed', 'challenge')
+    ]);
+    expect(fetch.calls.map((call) => call.init.headers)).toEqual([
+      { 'User-Agent': USER_AGENT },
+      { 'User-Agent': USER_AGENT },
+      {
+        'User-Agent': USER_AGENT,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    ]);
   });
 });
 

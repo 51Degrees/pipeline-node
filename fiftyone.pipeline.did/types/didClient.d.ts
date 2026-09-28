@@ -1,8 +1,8 @@
 /**
  * A function with the shape of the global `fetch`, taking a URL and an
  * options object with `method`, `headers` and `body`, and resolving to a
- * response with `status` and a `text()` method. Node 18 and later provide
- * it globally, and tests inject one.
+ * response with `status` and a `text()` method. Node 18 and later and
+ * browsers provide it globally, and tests inject one.
  */
 export type FetchFunction = (url: string, init: object) => Promise<{
     status: number;
@@ -60,13 +60,14 @@ export type DidClientOptions = {
     licenceKey?: string;
     /**
      * the API base including the `/api/v4/`
-     * segment. Defaults to the FOD_CLOUD_API_URL environment variable, then
-     * to the public cloud. A value without a trailing slash gains one.
+     * segment. Defaults to the FOD_CLOUD_API_URL environment variable where
+     * the runtime has environment variables, then to the public cloud. A value
+     * without a trailing slash gains one.
      */
     endpoint?: string;
     /**
      * the HTTP transport. Defaults to the
-     * global `fetch`.
+     * global `fetch`, on Node and in a browser alike.
      */
     fetch?: FetchFunction;
     /**
@@ -78,8 +79,8 @@ export type DidClientOptions = {
 /**
  * A function with the shape of the global `fetch`, taking a URL and an
  * options object with `method`, `headers` and `body`, and resolving to a
- * response with `status` and a `text()` method. Node 18 and later provide
- * it globally, and tests inject one.
+ * response with `status` and a `text()` method. Node 18 and later and
+ * browsers provide it globally, and tests inject one.
  * @callback FetchFunction
  * @param {string} url the absolute URL to request
  * @param {object} init the request options
@@ -113,10 +114,11 @@ export type DidClientOptions = {
  * side only. Needed to redeem where the account holds licence keys, and
  * sent only in the body of the redeem request, never in a URL.
  * @property {string} [endpoint] the API base including the `/api/v4/`
- * segment. Defaults to the FOD_CLOUD_API_URL environment variable, then
- * to the public cloud. A value without a trailing slash gains one.
+ * segment. Defaults to the FOD_CLOUD_API_URL environment variable where
+ * the runtime has environment variables, then to the public cloud. A value
+ * without a trailing slash gains one.
  * @property {FetchFunction} [fetch] the HTTP transport. Defaults to the
- * global `fetch`.
+ * global `fetch`, on Node and in a browser alike.
  * @property {function(): number} [now] the clock, as milliseconds since the
  * Unix epoch. Defaults to `Date.now`. Tests inject one.
  */
@@ -134,7 +136,9 @@ export type DidClientOptions = {
  * calls for the same reason and are not offered here.
  *
  * The public key list is cached per instance with the time it was fetched.
- * One instance can serve a whole server.
+ * One instance can serve a whole server. A page builds a new instance on
+ * each view, and there the browser's HTTP cache can answer the key request
+ * again for as long as the cloud's `Cache-Control` header allows.
  */
 export class DidClient {
     /**
@@ -145,7 +149,12 @@ export class DidClient {
     _resourceKey: string;
     _licenceKey: string;
     _endpoint: string;
-    /** @type {FetchFunction} */
+    /**
+     * The transport, called as a plain function and never as a method of
+     * the client, because a browser's fetch refuses to run as a method of
+     * anything but the window.
+     * @type {FetchFunction}
+     */
     _fetch: FetchFunction;
     _now: () => number;
     /** @type {PublicKeyEntry[] | null} */
