@@ -376,9 +376,11 @@ class RedeemResult {
 /**
  * Options for {@link DidClient}.
  * @typedef {object} DidClientOptions
- * @property {string} resourceKey the page's resource key. Required. Public
- * by nature, it travels in the route of the key and verify requests and in
- * the form body of the redeem request.
+ * @property {string} [resourceKey] the page's resource key. Public by
+ * nature, it travels in the route of the key and verify requests and in
+ * the form body of the redeem request. Required for the public cloud. A
+ * private cloud serves those routes with no resource key, so a client for
+ * one is built without it.
  * @property {string} [licenceKey] a licence key of the same account. Server
  * side only. Needed to redeem where the account holds licence keys, and
  * sent only in the body of the redeem request, never in a URL.
@@ -412,24 +414,39 @@ class RedeemResult {
  */
 class DidClient {
   /**
-   * @param {DidClientOptions} options the resource key, and optionally the
-   * licence key, endpoint, transport and clock
+   * @param {DidClientOptions} options the resource key, where the cloud
+   * takes one, and optionally the licence key, endpoint, transport and
+   * clock
    */
   constructor (options) {
-    if (!options || typeof options.resourceKey !== 'string' ||
-      options.resourceKey.length === 0) {
-      throw new TypeError('resourceKey is required');
+    if (!options || typeof options !== 'object') {
+      throw new TypeError('options are required');
     }
-    this._resourceKey = options.resourceKey;
-    this._licenceKey = typeof options.licenceKey === 'string' &&
-      options.licenceKey.length > 0
-      ? options.licenceKey
-      : null;
+    const resourceKey = options.resourceKey === undefined ||
+      options.resourceKey === null
+      ? null
+      : options.resourceKey;
+    if (resourceKey !== null &&
+      (typeof resourceKey !== 'string' || resourceKey.length === 0)) {
+      throw new TypeError('resourceKey must be a non-empty string');
+    }
     const endpoint = options.endpoint || environmentEndpoint() ||
       DEFAULT_ENDPOINT;
     // Normalised to end in exactly one slash so every URL is the base plus
     // a relative path, as the cloud request engine treats the same value.
     this._endpoint = endpoint.replace(/\/*$/, '/');
+    if (resourceKey === null && this._endpoint === DEFAULT_ENDPOINT) {
+      throw new TypeError('resourceKey is required for the public cloud');
+    }
+    /**
+     * @type {string | null} the resource key the requests carry, or null
+     * for a private cloud, whose routes take none
+     */
+    this._resourceKey = resourceKey;
+    this._licenceKey = typeof options.licenceKey === 'string' &&
+      options.licenceKey.length > 0
+      ? options.licenceKey
+      : null;
     const fetchFunction = options.fetch || globalThis.fetch;
     if (typeof fetchFunction !== 'function') {
       throw new TypeError('No fetch function is available. Run on Node 18 ' +
@@ -460,7 +477,10 @@ class DidClient {
     return this._endpoint;
   }
 
-  /** @returns {string} the resource key the requests carry */
+  /**
+   * @returns {string | null} the resource key the requests carry, or null
+   * where the cloud takes none
+   */
   get resourceKey () {
     return this._resourceKey;
   }
@@ -570,8 +590,7 @@ class DidClient {
    */
   async verify (fodId) {
     const id = identifierText(fodId);
-    const url = this._endpoint + 'id/verify/' +
-      encodeURIComponent(this._resourceKey) +
+    const url = this._endpoint + this._route('id/verify') +
       '?51did=' + encodeURIComponent(id) +
       '&owid=' + encodeURIComponent(id);
     const response = await this._fetch(url, {
@@ -600,8 +619,9 @@ class DidClient {
    * result, the challenge and the licence key all travel in the body of a
    * POST to id/redeem, so none of them reaches an access log. (The redeem
    * endpoint takes the resource key in the form on a POST, where the key
-   * and verify endpoints take it in the route on a GET.) One use against
-   * the resource key, the second of the two a browser context check costs.
+   * and verify endpoints take it in the route on a GET, and a private
+   * cloud takes none anywhere.) One use against the resource key, the
+   * second of the two a browser context check costs.
    *
    * A 200 and a 503 both produce a result, the 503 being the `unconfirmed`
    * outcome the caller may retry. Every cryptographic failure comes back as
@@ -624,7 +644,9 @@ class DidClient {
   async redeem (fodId, result, challenge) {
     const id = identifierText(fodId);
     const form = new URLSearchParams();
-    form.set('resource', this._resourceKey);
+    if (this._resourceKey !== null) {
+      form.set('resource', this._resourceKey);
+    }
     form.set('51did', id);
     form.set('result', typeof result === 'string' ? result : '');
     form.set('challenge', typeof challenge === 'string' ? challenge : '');
@@ -759,19 +781,18 @@ class DidClient {
   }
 
   /**
-   * GET id/key/{resource} and read each entry through
-   * {@link PublicKeys.fromList}, so `startsAt` is read where present and
-   * `created` otherwise, `endsAt` is kept, and `weekStart` is ignored. A
-   * start given is sent as `datetime`, so the cloud answers with the keys
-   * that start then or later only.
+   * GET id/key/{resource}, or id/key where the cloud takes no resource
+   * key, and read each entry through {@link PublicKeys.fromList}, so
+   * `startsAt` is read where present and `created` otherwise, `endsAt` is
+   * kept, and `weekStart` is ignored. A start given is sent as `datetime`,
+   * so the cloud answers with the keys that start then or later only.
    * @param {Date | null} since the start to fetch from, or null for the
    * whole list
    * @returns {Promise<PublicKeyEntry[]>} the answer, oldest start first
    * @private
    */
   async _fetchKeys (since) {
-    let url = this._endpoint + 'id/key/' +
-      encodeURIComponent(this._resourceKey);
+    let url = this._endpoint + this._route('id/key');
     if (since !== null) {
       // ISO 8601 UTC to the second, as the cloud writes it.
       url += '?datetime=' + encodeURIComponent(
@@ -798,6 +819,19 @@ class DidClient {
     } catch (error) {
       throw new DidClientError(error.message, response.status, body);
     }
+  }
+
+  /**
+   * A GET route with the resource key as its last segment, where the
+   * client has one. A private cloud's routes carry none.
+   * @param {string} route the route without the resource key
+   * @returns {string} the route to put after the endpoint
+   * @private
+   */
+  _route (route) {
+    return this._resourceKey === null
+      ? route
+      : route + '/' + encodeURIComponent(this._resourceKey);
   }
 }
 

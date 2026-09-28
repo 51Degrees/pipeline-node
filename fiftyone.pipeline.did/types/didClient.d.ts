@@ -47,11 +47,13 @@ export type SignatureCheck = {
  */
 export type DidClientOptions = {
     /**
-     * the page's resource key. Required. Public
-     * by nature, it travels in the route of the key and verify requests and in
-     * the form body of the redeem request.
+     * the page's resource key. Public by
+     * nature, it travels in the route of the key and verify requests and in
+     * the form body of the redeem request. Required for the public cloud. A
+     * private cloud serves those routes with no resource key, so a client for
+     * one is built without it.
      */
-    resourceKey: string;
+    resourceKey?: string;
     /**
      * a licence key of the same account. Server
      * side only. Needed to redeem where the account holds licence keys, and
@@ -107,9 +109,11 @@ export type DidClientOptions = {
 /**
  * Options for {@link DidClient}.
  * @typedef {object} DidClientOptions
- * @property {string} resourceKey the page's resource key. Required. Public
- * by nature, it travels in the route of the key and verify requests and in
- * the form body of the redeem request.
+ * @property {string} [resourceKey] the page's resource key. Public by
+ * nature, it travels in the route of the key and verify requests and in
+ * the form body of the redeem request. Required for the public cloud. A
+ * private cloud serves those routes with no resource key, so a client for
+ * one is built without it.
  * @property {string} [licenceKey] a licence key of the same account. Server
  * side only. Needed to redeem where the account holds licence keys, and
  * sent only in the body of the redeem request, never in a URL.
@@ -142,13 +146,18 @@ export type DidClientOptions = {
  */
 export class DidClient {
     /**
-     * @param {DidClientOptions} options the resource key, and optionally the
-     * licence key, endpoint, transport and clock
+     * @param {DidClientOptions} options the resource key, where the cloud
+     * takes one, and optionally the licence key, endpoint, transport and
+     * clock
      */
     constructor(options: DidClientOptions);
-    _resourceKey: string;
-    _licenceKey: string;
     _endpoint: string;
+    /**
+     * @type {string | null} the resource key the requests carry, or null
+     * for a private cloud, whose routes take none
+     */
+    _resourceKey: string | null;
+    _licenceKey: string;
     /**
      * The transport, called as a plain function and never as a method of
      * the client, because a browser's fetch refuses to run as a method of
@@ -167,8 +176,11 @@ export class DidClient {
     _pending: Promise<PublicKeyEntry[]> | null;
     /** @returns {string} the API base every request is built on */
     get endpoint(): string;
-    /** @returns {string} the resource key the requests carry */
-    get resourceKey(): string;
+    /**
+     * @returns {string | null} the resource key the requests carry, or null
+     * where the cloud takes none
+     */
+    get resourceKey(): string | null;
     /**
      * The published signing keys, oldest first. The whole list is fetched on
      * first use and again once it is a day old. The cloud publishes a key
@@ -238,8 +250,9 @@ export class DidClient {
      * result, the challenge and the licence key all travel in the body of a
      * POST to id/redeem, so none of them reaches an access log. (The redeem
      * endpoint takes the resource key in the form on a POST, where the key
-     * and verify endpoints take it in the route on a GET.) One use against
-     * the resource key, the second of the two a browser context check costs.
+     * and verify endpoints take it in the route on a GET, and a private
+     * cloud takes none anywhere.) One use against the resource key, the
+     * second of the two a browser context check costs.
      *
      * A 200 and a 503 both produce a result, the 503 being the `unconfirmed`
      * outcome the caller may retry. Every cryptographic failure comes back as
@@ -307,17 +320,25 @@ export class DidClient {
      */
     private _refresh;
     /**
-     * GET id/key/{resource} and read each entry through
-     * {@link PublicKeys.fromList}, so `startsAt` is read where present and
-     * `created` otherwise, `endsAt` is kept, and `weekStart` is ignored. A
-     * start given is sent as `datetime`, so the cloud answers with the keys
-     * that start then or later only.
+     * GET id/key/{resource}, or id/key where the cloud takes no resource
+     * key, and read each entry through {@link PublicKeys.fromList}, so
+     * `startsAt` is read where present and `created` otherwise, `endsAt` is
+     * kept, and `weekStart` is ignored. A start given is sent as `datetime`,
+     * so the cloud answers with the keys that start then or later only.
      * @param {Date | null} since the start to fetch from, or null for the
      * whole list
      * @returns {Promise<PublicKeyEntry[]>} the answer, oldest start first
      * @private
      */
     private _fetchKeys;
+    /**
+     * A GET route with the resource key as its last segment, where the
+     * client has one. A private cloud's routes carry none.
+     * @param {string} route the route without the resource key
+     * @returns {string} the route to put after the endpoint
+     * @private
+     */
+    private _route;
 }
 /**
  * The typed answer to a redemption. Built from the cloud's JSON body, with

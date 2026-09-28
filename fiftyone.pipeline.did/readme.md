@@ -410,7 +410,7 @@ const client = new DidClient({
 
 | Option | Meaning |
 | --- | --- |
-| `resourceKey` | Required. The page's resource key, public by nature. It travels in the route of the key and verify requests and in the form body of the redeem request |
+| `resourceKey` | Required for the public cloud. The page's resource key, public by nature. It travels in the route of the key and verify requests and in the form body of the redeem request. A private cloud serves those routes with no resource key, so a client for one is built without it |
 | `licenceKey` | Optional. A licence key of the same account, server side only. Needed to redeem where the account holds licence keys. Sent only in the body of the redeem request, never in a URL |
 | `endpoint` | Optional. The API base including the `/api/v4/` segment. Defaults to the `FOD_CLOUD_API_URL` environment variable where the runtime has environment variables, the same variable the cloud request engine honours, then to `https://cloud.51degrees.com/api/v4/`. A value without a trailing slash gains one |
 | `fetch` | Optional. The HTTP transport, defaulting to the global `fetch`, on Node and in a browser alike. Tests inject one |
@@ -607,6 +607,10 @@ const { DidClient } = require('fiftyone.pipeline.did');
 const client = new DidClient({ resourceKey: 'your resource key' });
 const valid = await client.verifySignature(fiftyOneDid);
 ```
+
+A page served by a private cloud, whose routes carry no resource key, builds
+the client with the endpoint alone, as
+`new DidClient({ endpoint: 'https://your-cloud.example/api/v4/' })`.
 
 A page builds a new client on each view, so the client's own copy of the key
 list lasts one view. The browser's HTTP cache can keep the list across views

@@ -371,6 +371,82 @@ describe('DidClient in a browser', () => {
   });
 });
 
+// A private cloud serves the key, verify and redeem routes with no resource
+// key, so a client for one is built with the endpoint alone and sends no
+// resource segment and no resource form field. The public cloud takes the
+// key on every route, so a client for it still needs one.
+describe('DidClient without a resource key', () => {
+  const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+  const saved = process.env.FOD_CLOUD_API_URL;
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.FOD_CLOUD_API_URL;
+    } else {
+      process.env.FOD_CLOUD_API_URL = saved;
+    }
+  });
+
+  test('is built with the endpoint alone', () => {
+    const client = new DidClient({ endpoint: ENDPOINT, fetch: fakeFetch(() => null) });
+    expect(client.resourceKey).toBeNull();
+    expect(client.endpoint).toBe(ENDPOINT);
+    // An endpoint from the environment serves as well.
+    process.env.FOD_CLOUD_API_URL = ENDPOINT;
+    expect(new DidClient({ fetch: fakeFetch(() => null) }).resourceKey)
+      .toBeNull();
+  });
+
+  test('the public cloud still needs one', () => {
+    delete process.env.FOD_CLOUD_API_URL;
+    const fetch = fakeFetch(() => null);
+    expect(() => new DidClient({ fetch })).toThrow(TypeError);
+    expect(() => new DidClient({
+      endpoint: 'https://cloud.51degrees.com/api/v4', fetch
+    })).toThrow(TypeError);
+    // An empty key is a missing one, never a private cloud.
+    expect(() => new DidClient({ endpoint: ENDPOINT, resourceKey: '', fetch }))
+      .toThrow(TypeError);
+  });
+
+  test('fetches the keys from id/key with no resource segment', async () => {
+    const { pairs, json } = await schedule();
+    const fetch = fakeFetch(() => response(200, json));
+    const client = new DidClient({ endpoint: ENDPOINT, fetch });
+    await expect(client.publicKeys()).resolves.toHaveLength(3);
+    expect(fetch.calls[0].url).toBe(ENDPOINT + 'id/key');
+    // Dated after the newest start held, so the keys from that start
+    // onwards are asked for.
+    await client.publicKeyFor(
+      await signedAt(pairs[2], new Date(START_3.getTime() + DAY)));
+    expect(fetch.calls[1].url).toBe(ENDPOINT + 'id/key?datetime=' +
+      encodeURIComponent(START_3.toISOString().replace(/\.\d+Z$/, 'Z')));
+  });
+
+  test('verifies through id/verify with no resource segment', async () => {
+    const fetch = fakeFetch(() => response(200, { valid: true }));
+    const client = new DidClient({ endpoint: ENDPOINT, fetch });
+    await expect(client.verify(fod)).resolves.toBe(true);
+    const id = encodeURIComponent(fod.asBase64Url());
+    expect(fetch.calls[0].url)
+      .toBe(ENDPOINT + 'id/verify?51did=' + id + '&owid=' + id);
+  });
+
+  test('redeems through id/redeem with no resource field', async () => {
+    const fetch = fakeFetch(() =>
+      response(200, { signature: 'verified', context: 'verified' }));
+    const client = new DidClient({
+      endpoint: ENDPOINT, licenceKey: LICENCE, fetch
+    });
+    const redeemed = await client.redeem(fod, 'sealed', 'challenge');
+    expect(redeemed.context).toBe('verified');
+    expect(fetch.calls[0].url).toBe(ENDPOINT + 'id/redeem');
+    const form = new URLSearchParams(fetch.calls[0].init.body);
+    expect(form.has('resource')).toBe(false);
+    expect(Array.from(form.keys()).sort())
+      .toEqual(['51did', 'challenge', 'license', 'result']);
+  });
+});
+
 describe('DidClient public keys', () => {
   test('reads startsAt and publicKey, oldest first, ignoring weekStart', async () => {
     const { pems, json } = await schedule();
