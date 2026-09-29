@@ -393,9 +393,10 @@ const sameMatchKey = Buffer.from(a.matchKey).equals(Buffer.from(b.matchKey));
 `DidClient` handles every manipulation of a 51Did a server needs against the
 cloud, so server code never builds a cloud URL or handles a key itself. One
 instance serves a whole server. It needs Node 18 or later for the built-in
-`fetch`, or a `fetch` function passed in. A caller that holds the published
-key list already, and fetches it on its own terms, chooses a key with
-`PublicKeys` instead, described under step 2a below.
+`fetch`, or a `fetch` function passed in, and it runs in a page as well, as
+[Verifying in a browser](#verifying-in-a-browser) describes. A caller that
+holds the published key list already, and fetches it on its own terms,
+chooses a key with `PublicKeys` instead, described under step 2a below.
 
 ```js
 const { FodId, DidClient } = require('fiftyone.pipeline.did');
@@ -409,12 +410,14 @@ const client = new DidClient({
 
 | Option | Meaning |
 | --- | --- |
-| `resourceKey` | Required. The page's resource key, public by nature. It travels in the route of the key and verify requests and in the form body of the redeem request |
+| `resourceKey` | Required for the public cloud. The page's resource key, public by nature. It travels in the route of the key and verify requests and in the form body of the redeem request. A private cloud serves those routes with no resource key, so a client for one is built without it |
 | `licenceKey` | Optional. A licence key of the same account, server side only. Needed to redeem where the account holds licence keys. Sent only in the body of the redeem request, never in a URL |
-| `endpoint` | Optional. The API base including the `/api/v4/` segment. Defaults to the `FOD_CLOUD_API_URL` environment variable, the same variable the cloud request engine honours, then to `https://cloud.51degrees.com/api/v4/`. A value without a trailing slash gains one |
-| `fetch` | Optional. The HTTP transport, defaulting to the global `fetch`. Tests inject one |
+| `endpoint` | Optional. The API base including the `/api/v4/` segment. Defaults to the `FOD_CLOUD_API_URL` environment variable where the runtime has environment variables, the same variable the cloud request engine honours, then to `https://cloud.51degrees.com/api/v4/`. A value without a trailing slash gains one |
+| `fetch` | Optional. The HTTP transport, defaulting to the global `fetch`, on Node and in a browser alike. Tests inject one |
 
-Every request carries a `User-Agent` naming this package and its version.
+On Node every request carries a `User-Agent` naming this package and its
+version. A browser sends its own, as
+[Verifying in a browser](#verifying-in-a-browser) explains.
 
 Every client method takes either a `FodId` or the identifier's base64 in
 either alphabet. A string is read before anything else happens. The client
@@ -475,11 +478,9 @@ rejects with a `DidClientError`, so an outage never reads as a forgery.
 
 **2a. Choose the key from a list you already hold.** The rule the client
 applies is offered on its own as `PublicKeys`, for a caller that holds the
-published list already and fetches it on its own terms, for example a page
-that keeps the list between visits and only asks the cloud for keys from the
-newest start it holds onwards. Such a caller chooses the same key the client
-would and never works the rule out for itself. Nothing in `PublicKeys`
-fetches or checks a signature.
+published list already and fetches it on its own terms. Such a caller
+chooses the same key the client would and never works the rule out for
+itself. Nothing in `PublicKeys` fetches or checks a signature.
 
 ```js
 const { FodId, PublicKeys } = require('fiftyone.pipeline.did');
@@ -595,6 +596,44 @@ status, a cloud that refuses the 51Did raises `DidArgumentError` (HTTP 400),
 a host that does not offer the creator context raises `DidNotSupportedError`
 (HTTP 404), and any other status raises `DidClientError` carrying
 `statusCode` and `body`. A transport failure raises the error `fetch` raised.
+
+## Verifying in a browser
+
+`DidClient` runs in a page with only `resourceKey`. There it reads no
+environment variable, uses the page's own `fetch`, and sends no `User-Agent`
+header, because a browser sends its own and one set by a page can make the
+browser ask the cloud's permission with a preflight request first.
+
+```js
+const { DidClient } = require('fiftyone.pipeline.did');
+
+const client = new DidClient({ resourceKey: 'your resource key' });
+const valid = await client.verifySignature(fiftyOneDid);
+```
+
+A page served by a private cloud, whose routes carry no resource key, builds
+the client with the endpoint alone, as
+`new DidClient({ endpoint: 'https://your-cloud.example/api/v4/' })`.
+
+A page builds a new client on each view, so the client's own copy of the key
+list lasts one view. The browser's HTTP cache can keep the list across views
+instead, for as long as the `Cache-Control` header the cloud sends with the
+key list allows, so a view within that time can be answered without a request
+to the cloud. The OWID library this package builds on fetches a creator's key
+through the browser's cache in the same way and keeps no copy of its own. An
+answer from the cache can be as old as that header allows, so a key the cloud
+replaces early reaches a page a little later than it reaches a server.
+
+Callers must not re-implement the key handling. The client decides when to
+fetch the list, what to ask the cloud for, how to merge each answer, how
+often it may ask and which keys to try, and those rules change with the
+cloud, so a page that fetches, keeps or chooses keys itself carries a copy of
+the rules that will not change when they do.
+
+The package is CommonJS and uses no Node built-ins, so a bundler includes it
+in a page. The client reads its version from the package's own
+`package.json`, so the bundler must include JSON files, which esbuild does
+without any setting.
 
 ## Non-goals
 
