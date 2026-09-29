@@ -32,7 +32,10 @@ const packageVersion = require('./package.json').version;
  */
 const DEFAULT_ENDPOINT = 'https://cloud.51degrees.com/api/v4/';
 
-/** Sent with every request so the cloud can tell which package called. */
+/**
+ * Sent with every request on Node so the cloud can tell which package
+ * called. See {@link requestHeaders} for why a browser does not send it.
+ */
 const USER_AGENT = 'fiftyone.pipeline.did/' + packageVersion;
 
 const MINUTE_MS = 60 * 1000;
@@ -131,7 +134,14 @@ const FactorResult = Object.freeze({
    * this factor, so it could not have checked it for any request. This is
    * NOT a mismatch and must not be read as one.
    */
-  MISCONFIGURED: 'misconfigured'
+  MISCONFIGURED: 'misconfigured',
+  /**
+   * The service that created the identifier recorded no value for this
+   * factor, so the identifier says nothing about it and there was nothing
+   * to compare. This is neither a mismatch nor `misconfigured`, which says
+   * the checking service could not determine the factor.
+   */
+  NOT_RECORDED: 'notrecorded'
 });
 
 /**
@@ -342,8 +352,8 @@ class RedeemResult {
 /**
  * A function with the shape of the global `fetch`, taking a URL and an
  * options object with `method`, `headers` and `body`, and resolving to a
- * response with `status` and a `text()` method. Node 18 and later provide
- * it globally, and tests inject one.
+ * response with `status` and a `text()` method. Node 18 and later and
+ * browsers provide it globally, and tests inject one.
  * @callback FetchFunction
  * @param {string} url the absolute URL to request
  * @param {object} init the request options
@@ -373,17 +383,20 @@ class RedeemResult {
 /**
  * Options for {@link DidClient}.
  * @typedef {object} DidClientOptions
- * @property {string} resourceKey the page's resource key. Required. Public
- * by nature, it travels in the route of the key and verify requests and in
- * the form body of the redeem request.
+ * @property {string} [resourceKey] the page's resource key. Public by
+ * nature, it travels in the route of the key and verify requests and in
+ * the form body of the redeem request. Required for the public cloud. A
+ * private cloud serves those routes with no resource key, so a client for
+ * one is built without it.
  * @property {string} [licenceKey] a licence key of the same account. Server
  * side only. Needed to redeem where the account holds licence keys, and
  * sent only in the body of the redeem request, never in a URL.
  * @property {string} [endpoint] the API base including the `/api/v4/`
- * segment. Defaults to the FOD_CLOUD_API_URL environment variable, then
- * to the public cloud. A value without a trailing slash gains one.
+ * segment. Defaults to the FOD_CLOUD_API_URL environment variable where
+ * the runtime has environment variables, then to the public cloud. A value
+ * without a trailing slash gains one.
  * @property {FetchFunction} [fetch] the HTTP transport. Defaults to the
- * global `fetch`.
+ * global `fetch`, on Node and in a browser alike.
  * @property {function(): number} [now] the clock, as milliseconds since the
  * Unix epoch. Defaults to `Date.now`. Tests inject one.
  */
@@ -402,35 +415,57 @@ class RedeemResult {
  * calls for the same reason and are not offered here.
  *
  * The public key list is cached per instance with the time it was fetched.
- * One instance can serve a whole server.
+ * One instance can serve a whole server. A page builds a new instance on
+ * each view, and there the browser's HTTP cache can answer the key request
+ * again for as long as the cloud's `Cache-Control` header allows.
  */
 class DidClient {
   /**
-   * @param {DidClientOptions} options the resource key, and optionally the
-   * licence key, endpoint, transport and clock
+   * @param {DidClientOptions} options the resource key, where the cloud
+   * takes one, and optionally the licence key, endpoint, transport and
+   * clock
    */
   constructor (options) {
-    if (!options || typeof options.resourceKey !== 'string' ||
-      options.resourceKey.length === 0) {
-      throw new TypeError('resourceKey is required');
+    if (!options || typeof options !== 'object') {
+      throw new TypeError('options are required');
     }
-    this._resourceKey = options.resourceKey;
-    this._licenceKey = typeof options.licenceKey === 'string' &&
-      options.licenceKey.length > 0
-      ? options.licenceKey
-      : null;
-    const endpoint = options.endpoint || process.env.FOD_CLOUD_API_URL ||
+    const resourceKey = options.resourceKey === undefined ||
+      options.resourceKey === null
+      ? null
+      : options.resourceKey;
+    if (resourceKey !== null &&
+      (typeof resourceKey !== 'string' || resourceKey.length === 0)) {
+      throw new TypeError('resourceKey must be a non-empty string');
+    }
+    const endpoint = options.endpoint || environmentEndpoint() ||
       DEFAULT_ENDPOINT;
     // Normalised to end in exactly one slash so every URL is the base plus
     // a relative path, as the cloud request engine treats the same value.
     this._endpoint = endpoint.replace(/\/*$/, '/');
+    if (resourceKey === null && this._endpoint === DEFAULT_ENDPOINT) {
+      throw new TypeError('resourceKey is required for the public cloud');
+    }
+    /**
+     * @type {string | null} the resource key the requests carry, or null
+     * for a private cloud, whose routes take none
+     */
+    this._resourceKey = resourceKey;
+    this._licenceKey = typeof options.licenceKey === 'string' &&
+      options.licenceKey.length > 0
+      ? options.licenceKey
+      : null;
     const fetchFunction = options.fetch || globalThis.fetch;
     if (typeof fetchFunction !== 'function') {
       throw new TypeError('No fetch function is available. Run on Node 18 ' +
-        'or later, or pass one as options.fetch.');
+        'or later or in a browser, or pass one as options.fetch.');
     }
-    /** @type {FetchFunction} */
-    this._fetch = fetchFunction;
+    /**
+     * The transport, called as a plain function and never as a method of
+     * the client, because a browser's fetch refuses to run as a method of
+     * anything but the window.
+     * @type {FetchFunction}
+     */
+    this._fetch = (url, init) => fetchFunction(url, init);
     this._now = typeof options.now === 'function'
       ? options.now
       : () => Date.now();
@@ -449,7 +484,10 @@ class DidClient {
     return this._endpoint;
   }
 
-  /** @returns {string} the resource key the requests carry */
+  /**
+   * @returns {string | null} the resource key the requests carry, or null
+   * where the cloud takes none
+   */
   get resourceKey () {
     return this._resourceKey;
   }
@@ -559,13 +597,12 @@ class DidClient {
    */
   async verify (fodId) {
     const id = identifierText(fodId);
-    const url = this._endpoint + 'id/verify/' +
-      encodeURIComponent(this._resourceKey) +
+    const url = this._endpoint + this._route('id/verify') +
       '?51did=' + encodeURIComponent(id) +
       '&owid=' + encodeURIComponent(id);
     const response = await this._fetch(url, {
       method: 'GET',
-      headers: { 'User-Agent': USER_AGENT }
+      headers: requestHeaders()
     });
     const body = await response.text();
     const parsed = tryParseJson(body);
@@ -589,8 +626,9 @@ class DidClient {
    * result, the challenge and the licence key all travel in the body of a
    * POST to id/redeem, so none of them reaches an access log. (The redeem
    * endpoint takes the resource key in the form on a POST, where the key
-   * and verify endpoints take it in the route on a GET.) One use against
-   * the resource key, the second of the two a browser context check costs.
+   * and verify endpoints take it in the route on a GET, and a private
+   * cloud takes none anywhere.) One use against the resource key, the
+   * second of the two a browser context check costs.
    *
    * A 200 and a 503 both produce a result, the 503 being the `unconfirmed`
    * outcome the caller may retry. Every cryptographic failure comes back as
@@ -613,7 +651,9 @@ class DidClient {
   async redeem (fodId, result, challenge) {
     const id = identifierText(fodId);
     const form = new URLSearchParams();
-    form.set('resource', this._resourceKey);
+    if (this._resourceKey !== null) {
+      form.set('resource', this._resourceKey);
+    }
     form.set('51did', id);
     form.set('result', typeof result === 'string' ? result : '');
     form.set('challenge', typeof challenge === 'string' ? challenge : '');
@@ -623,10 +663,9 @@ class DidClient {
     const url = this._endpoint + 'id/redeem';
     const response = await this._fetch(url, {
       method: 'POST',
-      headers: {
-        'User-Agent': USER_AGENT,
+      headers: requestHeaders({
         'Content-Type': 'application/x-www-form-urlencoded'
-      },
+      }),
       body: form.toString()
     });
     const body = await response.text();
@@ -749,19 +788,18 @@ class DidClient {
   }
 
   /**
-   * GET id/key/{resource} and read each entry through
-   * {@link PublicKeys.fromList}, so `startsAt` is read where present and
-   * `created` otherwise, `endsAt` is kept, and `weekStart` is ignored. A
-   * start given is sent as `datetime`, so the cloud answers with the keys
-   * that start then or later only.
+   * GET id/key/{resource}, or id/key where the cloud takes no resource
+   * key, and read each entry through {@link PublicKeys.fromList}, so
+   * `startsAt` is read where present and `created` otherwise, `endsAt` is
+   * kept, and `weekStart` is ignored. A start given is sent as `datetime`,
+   * so the cloud answers with the keys that start then or later only.
    * @param {Date | null} since the start to fetch from, or null for the
    * whole list
    * @returns {Promise<PublicKeyEntry[]>} the answer, oldest start first
    * @private
    */
   async _fetchKeys (since) {
-    let url = this._endpoint + 'id/key/' +
-      encodeURIComponent(this._resourceKey);
+    let url = this._endpoint + this._route('id/key');
     if (since !== null) {
       // ISO 8601 UTC to the second, as the cloud writes it.
       url += '?datetime=' + encodeURIComponent(
@@ -769,7 +807,7 @@ class DidClient {
     }
     const response = await this._fetch(url, {
       method: 'GET',
-      headers: { 'User-Agent': USER_AGENT }
+      headers: requestHeaders()
     });
     const body = await response.text();
     if (response.status !== 200) {
@@ -788,6 +826,19 @@ class DidClient {
     } catch (error) {
       throw new DidClientError(error.message, response.status, body);
     }
+  }
+
+  /**
+   * A GET route with the resource key as its last segment, where the
+   * client has one. A private cloud's routes carry none.
+   * @param {string} route the route without the resource key
+   * @returns {string} the route to put after the endpoint
+   * @private
+   */
+  _route (route) {
+    return this._resourceKey === null
+      ? route
+      : route + '/' + encodeURIComponent(this._resourceKey);
   }
 }
 
@@ -917,6 +968,42 @@ async function checkAgainst (fodId, keys) {
     }
   }
   return { valid: false, reason: SignatureReason.SIGNATURE };
+}
+
+/**
+ * The API base the FOD_CLOUD_API_URL environment variable names, where the
+ * runtime has environment variables. A browser has none.
+ * @returns {string | undefined} the API base, or undefined where there is
+ * no variable to read
+ */
+function environmentEndpoint () {
+  return typeof process !== 'undefined' && process.env
+    ? process.env.FOD_CLOUD_API_URL
+    : undefined;
+}
+
+/**
+ * The headers a request carries. On Node the package names itself in
+ * `User-Agent` so the cloud can tell which package called. A browser sends
+ * its own `User-Agent`, and one set by a page can make the browser ask the
+ * cloud's permission with a preflight request first, so the header is left
+ * out there and every request a page makes is a simple one.
+ * @param {object} [headers] the headers the request needs besides
+ * @returns {object} the headers to send
+ */
+function requestHeaders (headers) {
+  return Object.assign(
+    isNode() ? { 'User-Agent': USER_AGENT } : {}, headers);
+}
+
+/**
+ * Whether the runtime is Node, which has environment variables and lets
+ * a request name its sender.
+ * @returns {boolean} true on Node
+ */
+function isNode () {
+  return typeof process !== 'undefined' && !!process.versions &&
+    typeof process.versions.node === 'string';
 }
 
 /**

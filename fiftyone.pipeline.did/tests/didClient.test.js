@@ -193,6 +193,45 @@ function datetimeOf (call) {
   return value === null ? null : new Date(value);
 }
 
+/**
+ * Runs the function with no `process` global, as a page has none, and puts
+ * the global back once the function returns. A request the function starts
+ * is made before the function returns, so its headers are chosen without
+ * the global.
+ * @param {function(): any} fn the function to run
+ * @returns {any} what the function returned
+ */
+function withoutProcess (fn) {
+  const saved = globalThis.process;
+  globalThis.process = undefined;
+  try {
+    return fn();
+  } finally {
+    globalThis.process = saved;
+  }
+}
+
+/**
+ * A fetch stand-in that refuses to run as a method of anything but the
+ * window, as a browser's fetch does, and otherwise answers from a handler.
+ * @param {function(string, object, number): object} handler given the URL,
+ * the init and the call number, returns a response
+ * @returns {Function} the fetch function, with a `calls` array
+ */
+function windowFetch (handler) {
+  const calls = [];
+  const fetch = async function (url, init) {
+    if (this !== undefined && this !== globalThis) {
+      throw new TypeError('Illegal invocation');
+    }
+    const call = { url: String(url), init: init || {} };
+    calls.push(call);
+    return handler(call.url, call.init, calls.length);
+  };
+  fetch.calls = calls;
+  return fetch;
+}
+
 describe('DidClient construction', () => {
   const saved = process.env.FOD_CLOUD_API_URL;
   afterEach(() => {
@@ -233,6 +272,178 @@ describe('DidClient construction', () => {
   test('a missing fetch is refused', () => {
     expect(() => new DidClient({ resourceKey: RESOURCE, fetch: 'no' }))
       .toThrow(TypeError);
+  });
+});
+
+// A page builds a client with only the resource key. A browser has no
+// process global to read an endpoint from, runs its fetch only as a
+// function of the window, and sends its own User-Agent, where one set by
+// the client would make every request need a preflight.
+describe('DidClient in a browser', () => {
+  const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+  const saved = process.env.FOD_CLOUD_API_URL;
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.FOD_CLOUD_API_URL;
+    } else {
+      process.env.FOD_CLOUD_API_URL = saved;
+    }
+  });
+
+  /**
+   * A fetch stand-in answering the key, verify and redeem routes.
+   * @param {object[]} json the published key list
+   * @returns {Function} the fetch function, with a `calls` array
+   */
+  function cloudFetch (json) {
+    return fakeFetch((url) => {
+      if (url.indexOf('id/key/') >= 0) {
+        return response(200, json);
+      }
+      if (url.indexOf('id/verify/') >= 0) {
+        return response(200, { valid: true });
+      }
+      return response(200, { signature: 'verified', context: 'verified' });
+    });
+  }
+
+  test('the endpoint defaults to the public cloud where there is no process global', () => {
+    process.env.FOD_CLOUD_API_URL = 'https://other.example/api/v4';
+    const client = withoutProcess(() =>
+      new DidClient({ resourceKey: RESOURCE, fetch: fakeFetch(() => null) }));
+    expect(client.endpoint).toBe('https://cloud.51degrees.com/api/v4/');
+  });
+
+  test('the global fetch is called as a function of the window, never as a method of the client', async () => {
+    const { json } = await schedule();
+    const fetch = windowFetch(() => response(200, json));
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+    globalThis.fetch = fetch;
+    try {
+      const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT });
+      await expect(client.publicKeys()).resolves.toHaveLength(3);
+      // A fetch passed in is called the same way.
+      const passed = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+      await expect(passed.publicKeys()).resolves.toHaveLength(3);
+      expect(fetch.calls).toHaveLength(2);
+    } finally {
+      if (descriptor === undefined) {
+        delete globalThis.fetch;
+      } else {
+        Object.defineProperty(globalThis, 'fetch', descriptor);
+      }
+    }
+  });
+
+  test('no User-Agent header is sent, so every request is a simple one', async () => {
+    const { json } = await schedule();
+    const fetch = cloudFetch(json);
+    const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+    await withoutProcess(() => Promise.all([
+      client.publicKeys(),
+      client.verify(fod),
+      client.redeem(fod, 'sealed', 'challenge')
+    ]));
+    expect(fetch.calls.map((call) => call.init.headers)).toEqual([
+      {},
+      {},
+      { 'Content-Type': 'application/x-www-form-urlencoded' }
+    ]);
+  });
+
+  test('on Node every request names the package in User-Agent', async () => {
+    const { json } = await schedule();
+    const fetch = cloudFetch(json);
+    const client = new DidClient({ resourceKey: RESOURCE, endpoint: ENDPOINT, fetch });
+    await Promise.all([
+      client.publicKeys(),
+      client.verify(fod),
+      client.redeem(fod, 'sealed', 'challenge')
+    ]);
+    expect(fetch.calls.map((call) => call.init.headers)).toEqual([
+      { 'User-Agent': USER_AGENT },
+      { 'User-Agent': USER_AGENT },
+      {
+        'User-Agent': USER_AGENT,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    ]);
+  });
+});
+
+// A private cloud serves the key, verify and redeem routes with no resource
+// key, so a client for one is built with the endpoint alone and sends no
+// resource segment and no resource form field. The public cloud takes the
+// key on every route, so a client for it still needs one.
+describe('DidClient without a resource key', () => {
+  const fod = FodId.fromBase64(envelopeBase64(canonicalPayload()));
+  const saved = process.env.FOD_CLOUD_API_URL;
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.FOD_CLOUD_API_URL;
+    } else {
+      process.env.FOD_CLOUD_API_URL = saved;
+    }
+  });
+
+  test('is built with the endpoint alone', () => {
+    const client = new DidClient({ endpoint: ENDPOINT, fetch: fakeFetch(() => null) });
+    expect(client.resourceKey).toBeNull();
+    expect(client.endpoint).toBe(ENDPOINT);
+    // An endpoint from the environment serves as well.
+    process.env.FOD_CLOUD_API_URL = ENDPOINT;
+    expect(new DidClient({ fetch: fakeFetch(() => null) }).resourceKey)
+      .toBeNull();
+  });
+
+  test('the public cloud still needs one', () => {
+    delete process.env.FOD_CLOUD_API_URL;
+    const fetch = fakeFetch(() => null);
+    expect(() => new DidClient({ fetch })).toThrow(TypeError);
+    expect(() => new DidClient({
+      endpoint: 'https://cloud.51degrees.com/api/v4', fetch
+    })).toThrow(TypeError);
+    // An empty key is a missing one, never a private cloud.
+    expect(() => new DidClient({ endpoint: ENDPOINT, resourceKey: '', fetch }))
+      .toThrow(TypeError);
+  });
+
+  test('fetches the keys from id/key with no resource segment', async () => {
+    const { pairs, json } = await schedule();
+    const fetch = fakeFetch(() => response(200, json));
+    const client = new DidClient({ endpoint: ENDPOINT, fetch });
+    await expect(client.publicKeys()).resolves.toHaveLength(3);
+    expect(fetch.calls[0].url).toBe(ENDPOINT + 'id/key');
+    // Dated after the newest start held, so the keys from that start
+    // onwards are asked for.
+    await client.publicKeyFor(
+      await signedAt(pairs[2], new Date(START_3.getTime() + DAY)));
+    expect(fetch.calls[1].url).toBe(ENDPOINT + 'id/key?datetime=' +
+      encodeURIComponent(START_3.toISOString().replace(/\.\d+Z$/, 'Z')));
+  });
+
+  test('verifies through id/verify with no resource segment', async () => {
+    const fetch = fakeFetch(() => response(200, { valid: true }));
+    const client = new DidClient({ endpoint: ENDPOINT, fetch });
+    await expect(client.verify(fod)).resolves.toBe(true);
+    const id = encodeURIComponent(fod.asBase64Url());
+    expect(fetch.calls[0].url)
+      .toBe(ENDPOINT + 'id/verify?51did=' + id + '&owid=' + id);
+  });
+
+  test('redeems through id/redeem with no resource field', async () => {
+    const fetch = fakeFetch(() =>
+      response(200, { signature: 'verified', context: 'verified' }));
+    const client = new DidClient({
+      endpoint: ENDPOINT, licenceKey: LICENCE, fetch
+    });
+    const redeemed = await client.redeem(fod, 'sealed', 'challenge');
+    expect(redeemed.context).toBe('verified');
+    expect(fetch.calls[0].url).toBe(ENDPOINT + 'id/redeem');
+    const form = new URLSearchParams(fetch.calls[0].init.body);
+    expect(form.has('resource')).toBe(false);
+    expect(Array.from(form.keys()).sort())
+      .toEqual(['51did', 'challenge', 'license', 'result']);
   });
 });
 
@@ -1197,6 +1408,61 @@ describe('DidClient redeem', () => {
         .toBe(FactorResult.MISMATCH);
       expect(result.factors[Factor.BROWSER_VERSION])
         .toBe(FactorResult.MISCONFIGURED);
+    });
+
+  test('a factor the creator did not record is its own outcome',
+    async () => {
+      const body = {
+        signature: 'verified',
+        context: 'mismatch',
+        factors: {
+          transport: 'notrecorded',
+          device: 'verified',
+          browserip: 'mismatch',
+          connectionip: 'verified',
+          asn: 'misconfigured',
+          platformname: 'verified',
+          platformversion: 'notrecorded',
+          browsername: 'verified',
+          browserversion: 'verified'
+        }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(result.factors[Factor.TRANSPORT])
+        .toBe(FactorResult.NOT_RECORDED);
+      expect(result.factors[Factor.PLATFORM_VERSION])
+        .toBe(FactorResult.NOT_RECORDED);
+      expect(result.factors[Factor.BROWSER_IP]).toBe(FactorResult.MISMATCH);
+      expect(result.factors[Factor.ASN]).toBe(FactorResult.MISCONFIGURED);
+      expect(result.factors[Factor.DEVICE]).toBe(FactorResult.VERIFIED);
+      expect(result.factors[Factor.TRANSPORT])
+        .not.toBe(FactorResult.MISMATCH);
+      expect(result.factors[Factor.TRANSPORT])
+        .not.toBe(FactorResult.MISCONFIGURED);
+      expect(result.toJSON().factors).toEqual(body.factors);
+    });
+
+  test('the factor outcomes are the words the cloud writes', () => {
+    expect(Object.isFrozen(FactorResult)).toBe(true);
+    expect(Object.keys(FactorResult)).toEqual([
+      'VERIFIED', 'MISMATCH', 'MISCONFIGURED', 'NOT_RECORDED'
+    ]);
+    expect(Object.values(FactorResult)).toEqual([
+      'verified', 'mismatch', 'misconfigured', 'notrecorded'
+    ]);
+  });
+
+  test('a factor value this package does not list is passed through',
+    async () => {
+      const body = {
+        context: 'mismatch',
+        factors: { transport: 'somethingnewer' }
+      };
+      const { client } = redeemClient(200, body);
+      const result = await client.redeem(fod, RESULT, CHALLENGE);
+      expect(result.factors.transport).toBe('somethingnewer');
+      expect(result.toJSON().factors).toEqual(body.factors);
     });
 
   test('the factor names are the nine the cloud lists, in its order', () => {
