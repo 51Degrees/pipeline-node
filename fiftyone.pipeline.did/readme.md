@@ -444,20 +444,22 @@ const fodId = read.value;
 **2. Verify the signature offline.** The client fetches the published signing
 public keys from the cloud and picks the key in force when the identifier was
 created, being the entry whose start is latest on or before the identifier's
-date (a key stays in force until its `endsAt`, or until the next one starts
-where the cloud sends no `endsAt`). Near a period boundary the neighbouring
-key is tried as well, and no earlier key is tried. The envelope version must
-be the one the cloud signs and the payload at least the base length for its
-type.
+date. Every entry carries `startsAt` and `endsAt`, its scheduled end, which is
+the next key's start, and the newest entry carries one too although the next
+key is not yet published. A key stays in force until its `endsAt`, or until
+the next one starts where a service sends no `endsAt`. Near a period boundary
+the neighbouring key is tried as well, and no earlier key is tried. The
+envelope version must be the one the cloud signs and the payload at least the
+base length for its type.
 
-The cloud publishes each key only from shortly before its period starts, so
-the client verifies offline until the newest key it holds ends. It fetches the
-whole list on first use and again once the list is a day old. In between, it
-fetches the keys from the newest start it holds onwards for an identifier
-dated close to the end of the list or past it, and the keys from the start of
-the key in force at the identifier's date onwards when no key it holds
-verifies a signature, because a key can be replaced before its `endsAt`. Each
-answer is merged into the list, so no older key is dropped, and those two
+The cloud publishes each key only from fifteen minutes before its period
+starts, so the client verifies offline until the newest key it holds ends. It
+fetches the whole list on first use and again once the list is a day old. In
+between, it fetches the keys from the newest start it holds onwards for an
+identifier dated close to the end of the list or past it, and the keys from
+the start of the key in force at the identifier's date onwards when no key it
+holds verifies a signature, because a key can be replaced before its `endsAt`.
+Each answer is merged into the list, so no older key is dropped, and those two
 reasons cause at most one fetch a minute.
 
 ```js
@@ -556,10 +558,12 @@ on the server, with the licence key, against the 51Did it knows independently.
 ```js
 const redeemed = await client.redeem(fodId, result, challenge);
 redeemed.context      // ContextResult: 'verified', 'mismatch', 'nocontext',
-                      // 'notcheckable', 'expired', 'replayed', 'unreadable',
-                      // 'unconfirmed'
+                      // 'misconfigured', 'invaliddate', 'notcheckable',
+                      // 'expired', 'replayed', 'unreadable', 'unconfirmed'
 redeemed.signature    // SignatureResult: 'verified', 'invalid' or 'unknown'
-redeemed.factors      // where there is something to diagnose:
+redeemed.factors      // on a mismatch, on a misconfigured result where the
+                      //   transport was compared, and whenever any factor is
+                      //   'notrecorded', whatever the overall result:
                       //   { transport, device, browserip, connectionip,
                       //   asn, platformname, platformversion,
                       //   browsername, browserversion } each 'verified',
@@ -584,7 +588,10 @@ filling any of the four. Neither `misconfigured` nor `notrecorded` is a
 mismatch, and neither must ever be read as one, but they say different
 things, because `misconfigured` means the checking service could not
 determine the factor whilst `notrecorded` means the creating service
-recorded no value for it, so the identifier says nothing about it.
+recorded no value for it, so the identifier says nothing about it. A
+`notrecorded` factor is left out of the overall result, so `verified` can
+arrive beside factors that are `notrecorded`, and `factors` is sent whenever
+any factor is, so a receiver of `verified` sees how many factors it rests on.
 
 A context string this package does not know maps to `unreadable`, so an
 unrecognised outcome is never mistaken for a good one, and `contextRaw` keeps
@@ -618,11 +625,13 @@ the client with the endpoint alone, as
 A page builds a new client on each view, so the client's own copy of the key
 list lasts one view. The browser's HTTP cache can keep the list across views
 instead, for as long as the `Cache-Control` header the cloud sends with the
-key list allows, so a view within that time can be answered without a request
-to the cloud. The OWID library this package builds on fetches a creator's key
-through the browser's cache in the same way and keeps no copy of its own. An
-answer from the cache can be as old as that header allows, so a key the cloud
-replaces early reaches a page a little later than it reaches a server.
+key list allows, which is at most half an hour and never past the moment the
+next key is published, so a view within that time can be answered without a
+request to the cloud. The OWID library this package builds on fetches a
+creator's key through the browser's cache in the same way and keeps no copy
+of its own. An answer from the cache can be as old as that header allows, so
+a key the cloud replaces early reaches a page a little later than it reaches
+a server.
 
 Callers must not re-implement the key handling. The client decides when to
 fetch the list, what to ask the cloud for, how to merge each answer, how
