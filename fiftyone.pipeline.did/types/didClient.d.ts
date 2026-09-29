@@ -440,6 +440,13 @@ export const FactorResult: Readonly<{
      * NOT a mismatch and must not be read as one.
      */
     MISCONFIGURED: "misconfigured";
+    /**
+     * The service that created the identifier recorded no value for this
+     * factor, so the identifier says nothing about it and there was nothing
+     * to compare. This is neither a mismatch nor `misconfigured`, which says
+     * the checking service could not determine the factor.
+     */
+    NOT_RECORDED: "notrecorded";
 }>;
 /**
  * The names of the creator context factors, as the cloud writes them as

@@ -131,7 +131,14 @@ const FactorResult = Object.freeze({
    * this factor, so it could not have checked it for any request. This is
    * NOT a mismatch and must not be read as one.
    */
-  MISCONFIGURED: 'misconfigured'
+  MISCONFIGURED: 'misconfigured',
+  /**
+   * The service that created the identifier recorded no value for this
+   * factor, so the identifier says nothing about it and there was nothing
+   * to compare. This is neither a mismatch nor `misconfigured`, which says
+   * the checking service could not determine the factor.
+   */
+  NOT_RECORDED: 'notrecorded'
 });
 
 /**
