@@ -24,7 +24,7 @@
   "author": "51Degrees Engineering <engineering@51degrees.com>",
   "license": "EUPL-1.2",
   "dependencies": {
-    "owid": "github:51Degrees/owid-js#148763cb"
+    "owid": "github:SWAN-community/owid-js#e83f7076"
   },
   "bundleDependencies": [
     "owid"

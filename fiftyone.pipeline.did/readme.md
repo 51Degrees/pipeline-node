@@ -301,8 +301,9 @@ and `FodId.checkSignature()` run without contacting a network endpoint.
 
 The library is not on the npm registry, so `package.json` names it as a
 GitHub reference, which npm resolves by cloning the repository. The reference
-is `github:51Degrees/owid-js#148763cb`, the commit on `main` that carries the key selection fix and refuses redirects when fetching a key
-of the [51Degrees/owid-js](https://github.com/51Degrees/owid-js) fork. That
+is `github:SWAN-community/owid-js#e83f7076`, the commit on `main` of
+[SWAN-community/owid-js](https://github.com/SWAN-community/owid-js) that
+carries the key selection fix and refuses redirects when fetching a key. That
 applies only when working in this repository, because the published
 `fiftyone.pipeline.did` package carries the OWID source inside its own
 tarball under `node_modules/owid`, named in `bundleDependencies`. Anyone
