@@ -295,16 +295,17 @@ throws naming what to use instead, and an OWID that has been read is frozen
 and hands out its byte arrays as copies. This package follows the same shape,
 which is why `tryParse` and `tryFromByteArray` exist and why the OWID statuses
 appear in `FodId.ParseStatus` unchanged. The library also offers an offline
-`verifyWithPublicKey(pem, others)` and `checkSignatureWithPublicKey(pem,
-others)` that work in Node and the browser (Web Crypto), so `FodId.verify()`
-and `FodId.checkSignature()` run without contacting a network endpoint.
+`verifyWithPublicKey(pem)` and `checkSignatureWithPublicKey(pem)` that work
+in Node and the browser (Web Crypto), so `FodId.verify()` and
+`FodId.checkSignature()` run without contacting a network endpoint.
 
 The library is not on the npm registry, so `package.json` names it as a
 GitHub reference, which npm resolves by cloning the repository. The reference
-is `github:SWAN-community/owid-js#e83f7076`, the commit on `main` of
-[SWAN-community/owid-js](https://github.com/SWAN-community/owid-js) that
-carries the key selection fix and refuses redirects when fetching a key. That
-applies only when working in this repository, because the published
+is `github:SWAN-community/owid-js#6c5ff4e7`, the commit on `main` of
+[SWAN-community/owid-js](https://github.com/SWAN-community/owid-js) where a
+signature covers its own OWID and no other, and a creator's key is fetched
+from the `public-key` endpoint without following a redirect. Cloning is
+needed only when working in this repository, because the published
 `fiftyone.pipeline.did` package carries the OWID source inside its own
 tarball under `node_modules/owid`, named in `bundleDependencies`. Anyone
 installing the package from npm needs neither git nor reachable GitHub, and
