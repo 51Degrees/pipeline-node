@@ -443,7 +443,7 @@ class FodId {
    * key, false when it is not
    */
   verify (publicPem) {
-    return this._owid.verifyWithPublicKey(publicPem, []);
+    return this._owid.verifyWithPublicKey(publicPem);
   }
 
   /**
@@ -457,7 +457,7 @@ class FodId {
    * check could not be completed, a `message` and a `cause`
    */
   checkSignature (publicPem) {
-    return this._owid.checkSignatureWithPublicKey(publicPem, []);
+    return this._owid.checkSignatureWithPublicKey(publicPem);
   }
 }
 
