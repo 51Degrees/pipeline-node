@@ -280,6 +280,46 @@ and `PAYLOAD_LENGTH` are no longer part of the package.
 | `fodId.dateMinutes` | `fodId.date`, which reports the same unsigned value |
 | `FodId.PAYLOAD_LENGTH` and the other layout constants | Nothing. Every field has a named accessor, and the layout is in the specification linked above |
 
+## Reading a 51Did in a web page
+
+Code that runs in a visitor's browser often has one decision to make about
+a 51Did, being where it may go and under which terms, and every byte it
+loads is sent to every visitor. The `fiftyone.pipeline.did/reader` entry
+point answers that question and nothing else. It loads no OWID library, no
+key handling and no `DidClient`, which a test holds it to. Bundled and
+minified with esbuild in October 2026 it was 3.7 KB, where the package
+entry point was 29.4 KB.
+
+```js
+const { read, Usage } = require('fiftyone.pipeline.did/reader');
+
+const facts = read(untrusted);
+if (facts.ok && facts.usage !== Usage.NON_MARKETING) {
+  send(untrusted, facts.terms);
+}
+```
+
+`read` never throws and returns a frozen answer:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ok` | boolean | True when the value is a structurally valid 51Did |
+| `type` | `IdType` value or `null` | The identifier type |
+| `usage` | `Usage` value or `null` | The highest usage granted |
+| `usageIsIndirect` | boolean or `null` | Whether the issuer worked the usage out from a signal other than the caller stating it |
+| `terms` | string or `null` | The address of the terms document the identifier was created under, `null` where it states none or names a document this package does not know |
+
+The four fields are the ones `FodId` exposes under the same names, read by
+the same walk of the payload, so the two readers cannot disagree about an
+identifier, and the tests hold them to that for every type, usage and terms
+state. The entry point also exports `Usage` and `IdType`, so that a page
+compares against the named values without loading the package entry point.
+
+The reader checks no signature, so an identifier it reads may still be a
+forgery. It tells a page what an identifier says of itself. Code that has
+to know an identifier is genuine uses `FodId` and verifies it, as the
+sections below describe.
+
 ## OWID dependency
 
 `FodId` builds on the OWID envelope library
