@@ -22,7 +22,6 @@
 
 const { FodId } = require('../index');
 const { read, IdType, Usage } = require('../reader');
-const { PayloadStatus } = require('../internal/payload');
 const { payloadOf } = require('../internal/envelope');
 const {
   canonicalPayload,
@@ -195,9 +194,31 @@ describe('reader', () => {
       .toEqual(Array.from(FodId.tryParse(value).value.payload));
   });
 
-  it('names a successful walk as the OWID library names a successful read', () => {
-    expect(PayloadStatus.PARSED).toBe(FodId.ParseStatus.PARSED);
-    expect(PayloadStatus.PARSED).toBe(require('owid').ParseStatus.PARSED);
+  it('answers as FodId does for base 64 that is written oddly', () => {
+    const good = envelopeBase64(withTerms(canonicalPayload(), 1));
+    const half = Math.floor(good.length / 2);
+    const odd = [
+      good.slice(0, half) + '\n' + good.slice(half),
+      good.slice(0, half) + ' ' + good.slice(half),
+      '\t' + good + '\r\n',
+      good + '=',
+      good.slice(0, half) + '*' + good.slice(half),
+      good.slice(0, good.length - (good.length % 4) - 3),
+      FodId.toBase64Url(good) + '==',
+      'A'
+    ];
+    for (const value of odd) {
+      const full = FodId.tryParse(value);
+      const facts = read(value);
+      expect(facts.ok).toBe(full.ok);
+      expect(facts.terms).toBe(full.ok ? full.value.terms : null);
+    }
+  });
+
+  it('reads each value afresh, so a payload handed back cannot change a later answer', () => {
+    const value = envelopeBase64(withTerms(canonicalPayload(), 1));
+    payloadOf(value).fill(0);
+    expect(read(value).terms).toBe(MODEL_TERMS_2_URL);
   });
 
   it('loads without the OWID library', () => {

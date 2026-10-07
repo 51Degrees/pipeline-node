@@ -5,8 +5,8 @@
  * sent to every visitor, so it loads no OWID library, no key handling and
  * no client for the remote server.
  *
- * It answers with the same named values {@link FodId} does, read by the
- * same walk of the payload, so the two cannot disagree about an
+ * It answers with the same named values {@link FodId} does, worked out by
+ * the same walk of the payload, so the two cannot disagree about an
  * identifier. It checks no signature and fetches nothing, so an identifier
  * it reads may still be a forgery, and code that has to know an identifier
  * is genuine uses {@link FodId} from the package entry point.

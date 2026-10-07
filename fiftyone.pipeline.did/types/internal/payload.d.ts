@@ -1,16 +1,13 @@
 /**
- * Why a walk of a 51Did payload succeeded or failed. PARSED carries the
- * same value the OWID library gives a successful read of an envelope, so
- * that one status says the whole identifier was read, and the others are
- * the outcomes that belong to the payload rather than to the envelope.
- * Frozen, and compared by value rather than by the text of any message.
+ * Why a walk of a 51Did payload refused it, being the outcomes that belong
+ * to the payload rather than to the envelope. Frozen, and compared by value
+ * rather than by the text of any message.
  *
- * This module is internal to the package, and both readers of a 51Did
- * walk the payload through it, so the layout is read in one place.
+ * This module is internal to the package. Both readers of a 51Did walk the
+ * payload through it and take the named values it works out, so the
+ * layout is read in one place.
  */
 export const PayloadStatus: Readonly<{
-    /** The payload holds a structurally valid 51Did. */
-    PARSED: "Parsed";
     /**
      * The payload is shorter than the five byte header (one byte of flags
      * and four bytes of licence id), so not even the identifier type can be
@@ -47,22 +44,27 @@ export const PayloadStatus: Readonly<{
  * context section whose lengths belong to the cloud, so a longer payload is
  * accepted whatever its length.
  * @param {Uint8Array} payload the payload bytes
- * @returns {{status: string, flags?: number, licenseId?: number,
- * matchKey?: Uint8Array, termsIndex?: number, length: number,
- * required: number, type?: number, payloadVersion?: number,
- * usageBits?: number}} `status` PARSED with the fields, or a 51Did status
- * with the length the type needed, and the version or the usage bits found
- * where that is what the payload was refused for
+ * @returns {{ok: boolean, flags?: number, type?: number, usage?: number,
+ * usageIsIndirect?: boolean, terms?: (string|null), licenseId?: number,
+ * matchKeyLength?: number, status?: string, length?: number,
+ * required?: number, payloadVersion?: number, usageBits?: number}}
+ * `ok` true with the flags byte, the named values every reader answers
+ * with, the licence id and the length of the match key, or `ok` false
+ * with a status and the length the type needed, and the version or the
+ * usage bits found where that is what the payload was refused for
  */
 export function unpack(payload: Uint8Array): {
-    status: string;
+    ok: boolean;
     flags?: number;
-    licenseId?: number;
-    matchKey?: Uint8Array;
-    termsIndex?: number;
-    length: number;
-    required: number;
     type?: number;
+    usage?: number;
+    usageIsIndirect?: boolean;
+    terms?: (string | null);
+    licenseId?: number;
+    matchKeyLength?: number;
+    status?: string;
+    length?: number;
+    required?: number;
     payloadVersion?: number;
     usageBits?: number;
 };

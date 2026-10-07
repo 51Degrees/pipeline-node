@@ -22,8 +22,7 @@
 
 const IdType = require('./idType');
 const Usage = require('./usage');
-const Terms = require('./internal/terms');
-const { PayloadStatus, unpack } = require('./internal/payload');
+const { unpack } = require('./internal/payload');
 const { payloadOf } = require('./internal/envelope');
 
 /**
@@ -33,8 +32,8 @@ const { payloadOf } = require('./internal/envelope');
  * sent to every visitor, so it loads no OWID library, no key handling and
  * no client for the remote server.
  *
- * It answers with the same named values {@link FodId} does, read by the
- * same walk of the payload, so the two cannot disagree about an
+ * It answers with the same named values {@link FodId} does, worked out by
+ * the same walk of the payload, so the two cannot disagree about an
  * identifier. It checks no signature and fetches nothing, so an identifier
  * it reads may still be a forgery, and code that has to know an identifier
  * is genuine uses {@link FodId} from the package entry point.
@@ -65,19 +64,16 @@ const NOT_A_51DID = Object.freeze({
  */
 function read (value) {
   const payload = payloadOf(value);
-  if (payload === null) {
-    return NOT_A_51DID;
-  }
-  const unpacked = unpack(payload);
-  if (unpacked.status !== PayloadStatus.PARSED) {
+  const unpacked = payload && unpack(payload);
+  if (!unpacked || !unpacked.ok) {
     return NOT_A_51DID;
   }
   return Object.freeze({
     ok: true,
-    type: IdType.fromFlags(unpacked.flags),
-    usage: Usage.fromFlags(unpacked.flags),
-    usageIsIndirect: (unpacked.flags & 0b1000) !== 0,
-    terms: Terms.url(Terms.fromIndex(unpacked.termsIndex))
+    type: unpacked.type,
+    usage: unpacked.usage,
+    usageIsIndirect: unpacked.usageIsIndirect,
+    terms: unpacked.terms
   });
 }
 

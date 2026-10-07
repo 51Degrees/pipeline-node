@@ -22,21 +22,23 @@
 
 const layout = require('./layout');
 const IdType = require('../idType');
+const Usage = require('../usage');
 const Terms = require('./terms');
 
+// Bit 3 of the flags byte, set where the issuer worked the usage out from a
+// signal other than the caller stating it.
+const USAGE_INDIRECT_BIT = 0b1000;
+
 /**
- * Why a walk of a 51Did payload succeeded or failed. PARSED carries the
- * same value the OWID library gives a successful read of an envelope, so
- * that one status says the whole identifier was read, and the others are
- * the outcomes that belong to the payload rather than to the envelope.
- * Frozen, and compared by value rather than by the text of any message.
+ * Why a walk of a 51Did payload refused it, being the outcomes that belong
+ * to the payload rather than to the envelope. Frozen, and compared by value
+ * rather than by the text of any message.
  *
- * This module is internal to the package, and both readers of a 51Did
- * walk the payload through it, so the layout is read in one place.
+ * This module is internal to the package. Both readers of a 51Did walk the
+ * payload through it and take the named values it works out, so the
+ * layout is read in one place.
  */
 const PayloadStatus = Object.freeze({
-  /** The payload holds a structurally valid 51Did. */
-  PARSED: 'Parsed',
   /**
    * The payload is shorter than the five byte header (one byte of flags
    * and four bytes of licence id), so not even the identifier type can be
@@ -74,17 +76,20 @@ const PayloadStatus = Object.freeze({
  * context section whose lengths belong to the cloud, so a longer payload is
  * accepted whatever its length.
  * @param {Uint8Array} payload the payload bytes
- * @returns {{status: string, flags?: number, licenseId?: number,
- * matchKey?: Uint8Array, termsIndex?: number, length: number,
- * required: number, type?: number, payloadVersion?: number,
- * usageBits?: number}} `status` PARSED with the fields, or a 51Did status
- * with the length the type needed, and the version or the usage bits found
- * where that is what the payload was refused for
+ * @returns {{ok: boolean, flags?: number, type?: number, usage?: number,
+ * usageIsIndirect?: boolean, terms?: (string|null), licenseId?: number,
+ * matchKeyLength?: number, status?: string, length?: number,
+ * required?: number, payloadVersion?: number, usageBits?: number}}
+ * `ok` true with the flags byte, the named values every reader answers
+ * with, the licence id and the length of the match key, or `ok` false
+ * with a status and the length the type needed, and the version or the
+ * usage bits found where that is what the payload was refused for
  */
 function unpack (payload) {
   const length = payload.length;
   if (length < layout.HEADER_LENGTH) {
     return {
+      ok: false,
       status: PayloadStatus.PAYLOAD_TOO_SHORT,
       length,
       required: layout.HEADER_LENGTH
@@ -99,6 +104,7 @@ function unpack (payload) {
   const payloadVersion = (flags >> 4) & 0b11;
   if (payloadVersion !== layout.SUPPORTED_PAYLOAD_VERSION) {
     return {
+      ok: false,
       status: PayloadStatus.UNSUPPORTED_PAYLOAD_VERSION,
       length,
       required: layout.HEADER_LENGTH,
@@ -112,6 +118,7 @@ function unpack (payload) {
   const usageBits = flags & 0b111;
   if (usageBits === 0) {
     return {
+      ok: false,
       status: PayloadStatus.NO_USAGE,
       length,
       required: layout.HEADER_LENGTH,
@@ -140,6 +147,7 @@ function unpack (payload) {
   const required = layout.HEADER_LENGTH + matchKeyLength;
   if (length < required) {
     return {
+      ok: false,
       status: PayloadStatus.INVALID_TYPE_PAYLOAD_LENGTH,
       length,
       required,
@@ -160,16 +168,17 @@ function unpack (payload) {
   const termsIndex = termsOffset + layout.TERMS_LENGTH <= length
     ? payload[termsOffset]
     : Terms.NOT_STATED;
+  // The named values are worked out here and nowhere else, so no reader
+  // restates a bit of the flags byte or the terms table.
   return {
-    status: PayloadStatus.PARSED,
+    ok: true,
     flags,
+    type,
+    usage: Usage.fromFlags(flags),
+    usageIsIndirect: (flags & USAGE_INDIRECT_BIT) !== 0,
+    terms: Terms.url(Terms.fromIndex(termsIndex)),
     licenseId,
-    // slice() copies, so the stored match key is this identifier's own.
-    matchKey: payload.slice(
-      layout.MATCH_KEY_OFFSET, layout.MATCH_KEY_OFFSET + matchKeyLength),
-    termsIndex,
-    length,
-    required
+    matchKeyLength
   };
 }
 

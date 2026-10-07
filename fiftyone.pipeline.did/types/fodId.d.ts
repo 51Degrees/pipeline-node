@@ -169,12 +169,20 @@ declare class FodId {
     _owid: object;
     /** @type {number} the flags byte */
     _flags: number;
-    /** @type {number} the licence id field, unsigned */
-    _licenseId: number;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     _matchKey: Uint8Array;
-    /** @type {number} the terms index, zero where the payload carries none */
-    _termsIndex: number;
+    /**
+     * @type {{type: number, usage: number, usageIsIndirect: boolean,
+     * licenseId: number, terms: (string|null)}} what the walk of the
+     * payload answered, being the named values the accessors hand out
+     */
+    _read: {
+        type: number;
+        usage: number;
+        usageIsIndirect: boolean;
+        licenseId: number;
+        terms: (string | null);
+    };
     /** @returns {number} the IdType carried in bits 6-7 of the flags. */
     get type(): number;
     /**

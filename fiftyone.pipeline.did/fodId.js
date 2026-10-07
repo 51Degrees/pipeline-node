@@ -22,9 +22,9 @@
 
 const owid = require('owid');
 const IdType = require('./idType');
-const Usage = require('./usage');
-const Terms = require('./internal/terms');
+const layout = require('./internal/layout');
 const { PayloadStatus, unpack } = require('./internal/payload');
+const { toStandardBase64 } = require('./internal/base64');
 const FodIdParseError = require('./fodIdParseError');
 
 /**
@@ -32,8 +32,8 @@ const FodIdParseError = require('./fodIdParseError');
  * vocabulary is carried through unchanged, because a 51Did failing to be
  * an OWID is reported exactly as the OWID library reported it, and the
  * members of PayloadStatus are added for the outcomes that belong to the
- * 51Did payload rather than to the envelope. Frozen, and compared by value rather than
- * by the text of any message.
+ * 51Did payload rather than to the envelope. Frozen, and compared by value
+ * rather than by the text of any message.
  */
 const ParseStatus = Object.freeze(
   Object.assign({}, owid.ParseStatus, PayloadStatus));
@@ -130,12 +130,14 @@ class FodId {
     this._owid = read.value._owid;
     /** @type {number} the flags byte */
     this._flags = read.value._flags;
-    /** @type {number} the licence id field, unsigned */
-    this._licenseId = read.value._licenseId;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     this._matchKey = read.value._matchKey;
-    /** @type {number} the terms index, zero where the payload carries none */
-    this._termsIndex = read.value._termsIndex;
+    /**
+     * @type {{type: number, usage: number, usageIsIndirect: boolean,
+     * licenseId: number, terms: (string|null)}} what the walk of the
+     * payload answered, being the named values the accessors hand out
+     */
+    this._read = read.value._read;
   }
 
   /**
@@ -154,12 +156,7 @@ class FodId {
     if (typeof value !== 'string') {
       throw new TypeError('value must be a string');
     }
-    let base64 = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-    switch (base64.length % 4) {
-      case 2: base64 += '=='; break;
-      case 3: base64 += '='; break;
-    }
-    return base64;
+    return toStandardBase64(value);
   }
 
   /**
@@ -274,7 +271,7 @@ class FodId {
 
   /** @returns {number} the IdType carried in bits 6-7 of the flags. */
   get type () {
-    return IdType.fromFlags(this._flags);
+    return this._read.type;
   }
 
   /**
@@ -283,7 +280,7 @@ class FodId {
    * @returns {number} a Usage value
    */
   get usage () {
-    return Usage.fromFlags(this._flags);
+    return this._read.usage;
   }
 
   /**
@@ -297,7 +294,7 @@ class FodId {
    * @returns {boolean}
    */
   get usageIsIndirect () {
-    return (this._flags & 0b1000) !== 0;
+    return this._read.usageIsIndirect;
   }
 
   /**
@@ -313,7 +310,7 @@ class FodId {
    * @returns {number} the raw field value
    */
   get licenseId () {
-    return this._licenseId;
+    return this._read.licenseId;
   }
 
   /**
@@ -348,7 +345,7 @@ class FodId {
    * no document this package knows, which is never an empty string
    */
   get terms () {
-    return Terms.url(Terms.fromIndex(this._termsIndex));
+    return this._read.terms;
   }
 
   /** @returns {number} the OWID version. */
@@ -449,8 +446,9 @@ function readEnvelope (read) {
   if (!read.ok) {
     return { ok: false, value: null, status: read.status };
   }
-  const unpacked = unpack(read.owid.payload);
-  if (unpacked.status !== ParseStatus.PARSED) {
+  const payload = read.owid.payload;
+  const unpacked = unpack(payload);
+  if (!unpacked.ok) {
     return {
       ok: false, value: null, status: unpacked.status, detail: unpacked
     };
@@ -458,9 +456,11 @@ function readEnvelope (read) {
   const fodId = Object.create(FodId.prototype);
   fodId._owid = read.owid;
   fodId._flags = unpacked.flags;
-  fodId._licenseId = unpacked.licenseId;
-  fodId._matchKey = unpacked.matchKey;
-  fodId._termsIndex = unpacked.termsIndex;
+  // slice() copies, so the stored match key is this identifier's own.
+  fodId._matchKey = payload.slice(
+    layout.MATCH_KEY_OFFSET,
+    layout.MATCH_KEY_OFFSET + unpacked.matchKeyLength);
+  fodId._read = unpacked;
   return { ok: true, value: fodId, status: ParseStatus.PARSED };
 }
 

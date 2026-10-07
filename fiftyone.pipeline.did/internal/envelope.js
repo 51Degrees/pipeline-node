@@ -39,85 +39,59 @@
  * cannot drift apart unnoticed.
  */
 
-const SUPPORTED_VERSIONS = [1, 2, 3];
+const { toStandardBase64 } = require('./base64');
+
 const MAXIMUM_DOMAIN_LENGTH = 253;
 const SIGNATURE_LENGTH = 64;
 
 /**
- * The bytes of a base 64 string in either alphabet, with or without
- * padding, or null where the value is not a string or not base 64.
- * @param {*} value what was offered as a 51Did
- * @returns {Uint8Array|null} the bytes, or null
- */
-function bytesOf (value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  let base64 = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-  if (base64.length === 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
-    return null;
-  }
-  switch (base64.length % 4) {
-    case 2: base64 += '=='; break;
-    case 3: base64 += '='; break;
-  }
-  let text;
-  try {
-    text = atob(base64);
-  } catch (e) {
-    return null;
-  }
-  const bytes = new Uint8Array(text.length);
-  for (let i = 0; i < text.length; i++) {
-    bytes[i] = text.charCodeAt(i);
-  }
-  return bytes;
-}
-
-/**
  * The payload of the OWID envelope in a base 64 string, or null where the
- * string does not hold exactly one structurally valid envelope.
+ * value does not hold exactly one structurally valid envelope. The string
+ * is decoded as the OWID library decodes it, so both readers accept the
+ * same strings.
  * @param {*} value what was offered as a 51Did
- * @returns {Uint8Array|null} a copy of the payload bytes, or null
+ * @returns {Uint8Array|null} the payload bytes, or null
  */
 function payloadOf (value) {
-  const bytes = bytesOf(value);
-  if (bytes === null || bytes.length === 0) {
+  let text;
+  try {
+    text = atob(toStandardBase64(value));
+  } catch (e) {
+    // Not a string, or not base 64.
     return null;
   }
-  const total = bytes.length;
-  let at = 0;
-  const version = bytes[at++];
-  if (SUPPORTED_VERSIONS.indexOf(version) === -1) {
-    return null;
-  }
+  // Each character of the decoded text is one byte of the envelope. The
+  // fields before the payload are read from the text, so the only bytes
+  // copied are the payload's own.
+  const version = text.charCodeAt(0);
   // The domain ends at the first zero byte, which has to arrive within the
   // longest domain there can be.
-  const limit = Math.min(total, at + MAXIMUM_DOMAIN_LENGTH + 1);
-  let ended = false;
-  while (at < limit) {
-    if (bytes[at++] === 0) {
-      ended = true;
-      break;
-    }
-  }
-  if (!ended) {
+  const domainEnd = text.indexOf('\0', 1);
+  if (!(version >= 1 && version <= 3) ||
+      domainEnd < 0 || domainEnd - 1 > MAXIMUM_DOMAIN_LENGTH) {
     return null;
   }
-  at += version === 1 ? 2 : 4;
-  if (total - at < 4) {
-    return null;
-  }
+  // The date follows the domain, and the payload length follows the date.
+  const lengthAt = domainEnd + 1 + (version === 1 ? 2 : 4);
   // Little endian, and unsigned so that a length with the high bit set is
   // a large number rather than a negative one.
   const declared = (
-    bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16) |
-    (bytes[at + 3] << 24)) >>> 0;
-  at += 4;
-  if (total - at - SIGNATURE_LENGTH !== declared) {
+    text.charCodeAt(lengthAt) | (text.charCodeAt(lengthAt + 1) << 8) |
+    (text.charCodeAt(lengthAt + 2) << 16) |
+    (text.charCodeAt(lengthAt + 3) << 24)) >>> 0;
+  const payloadAt = lengthAt + 4;
+  // The bytes after the length have to be exactly the payload and the
+  // signature. An envelope that stops before its length field ends fails
+  // here too, because it leaves fewer bytes than a signature, and a length
+  // byte that is missing reads as zero.
+  if (text.length - payloadAt - SIGNATURE_LENGTH !== declared) {
     return null;
   }
-  return bytes.slice(at, at + declared);
+  const payload = new Uint8Array(declared);
+  for (let i = 0; i < declared; i++) {
+    payload[i] = text.charCodeAt(payloadAt + i);
+  }
+  return payload;
 }
 
 module.exports = { payloadOf };
