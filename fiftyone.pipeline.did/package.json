@@ -16,6 +16,10 @@
       "types": "./types/index.d.ts",
       "default": "./index.js"
     },
+    "./reader": {
+      "types": "./types/reader.d.ts",
+      "default": "./reader.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

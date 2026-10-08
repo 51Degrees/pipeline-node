@@ -21,48 +21,22 @@
  * ********************************************************************* */
 
 const owid = require('owid');
-const layout = require('./internal/layout');
 const IdType = require('./idType');
-const Usage = require('./usage');
-const Terms = require('./internal/terms');
+const layout = require('./internal/layout');
+const { PayloadStatus, unpack } = require('./internal/payload');
+const { toStandardBase64 } = require('./internal/base64');
 const FodIdParseError = require('./fodIdParseError');
 
 /**
  * Why a read of a 51Did succeeded or failed. The OWID library's own
  * vocabulary is carried through unchanged, because a 51Did failing to be
- * an OWID is reported exactly as the OWID library reported it, and four
- * members are added for the outcomes that belong to the 51Did payload
- * rather than to the envelope. Frozen, and compared by value rather than
- * by the text of any message.
+ * an OWID is reported exactly as the OWID library reported it, and the
+ * members of PayloadStatus are added for the outcomes that belong to the
+ * 51Did payload rather than to the envelope. Frozen, and compared by value
+ * rather than by the text of any message.
  */
-const ParseStatus = Object.freeze(Object.assign({}, owid.ParseStatus, {
-  /**
-   * The payload is shorter than the five byte header (one byte of flags
-   * and four bytes of licence id), so not even the identifier type can be
-   * read.
-   */
-  PAYLOAD_TOO_SHORT: 'PayloadTooShort',
-  /**
-   * The header was read and named a type, and the payload is shorter than
-   * the match key that type carries after the header (16 GUID bytes for
-   * Random, 32 hash bytes for Probabilistic and HashedEmail).
-   */
-  INVALID_TYPE_PAYLOAD_LENGTH: 'InvalidTypePayloadLength',
-  /**
-   * Bits 4 and 5 of the flags byte name a payload layout version this
-   * package does not know, so no field is read. A later version exists
-   * precisely because a field moved, so reading the payload under the
-   * layout this package knows would answer with values that are wrong
-   * rather than absent.
-   */
-  UNSUPPORTED_PAYLOAD_VERSION: 'UnsupportedPayloadVersion',
-  /**
-   * Bits 0 to 2 of the flags byte are all clear, which is not a usage. The
-   * cloud writes no flags byte without bit 0, so such a payload is damaged
-   * or forged, and it is refused rather than offered as a fourth usage.
-   */
-  NO_USAGE: 'NoUsage'
-}));
+const ParseStatus = Object.freeze(
+  Object.assign({}, owid.ParseStatus, PayloadStatus));
 
 /**
  * The answer from {@link FodId.tryParse} and {@link FodId.tryFromByteArray}.
@@ -156,22 +130,28 @@ class FodId {
     this._owid = read.value._owid;
     /** @type {number} the flags byte */
     this._flags = read.value._flags;
-    /** @type {number} the licence id field, unsigned */
-    this._licenseId = read.value._licenseId;
     /** @type {Uint8Array} this identifier's own copy of the match key bytes */
     this._matchKey = read.value._matchKey;
-    /** @type {number} the terms index, zero where the payload carries none */
-    this._termsIndex = read.value._termsIndex;
+    /**
+     * @type {{type: number, usage: number, usageIsIndirect: boolean,
+     * licenseId: number, terms: (string|null)}} what the walk of the
+     * payload answered, being the named values the accessors hand out
+     */
+    this._read = read.value._read;
   }
 
   /**
    * Restores a base64 string in either alphabet to the standard alphabet
-   * with padding, which is the only form the OWID library decodes. Leading
-   * and trailing whitespace is stripped first, so a value carried through a
-   * log line, a text field or a copy and paste with a stray newline still
-   * parses. The URL-safe characters `-` and `_` become `+` and `/`, then
-   * padding is added where the stripped length calls for it. A string
-   * already in the standard form comes back unchanged.
+   * with padding, the form the cloud issues. This is written by hand
+   * because the OWID library decodes with `atob`, which refuses the
+   * URL-safe alphabet. Node's `Buffer` reads both alphabets, and a browser
+   * has no `Buffer`.
+   *
+   * Leading and trailing whitespace is stripped first, so a value carried
+   * through a log line, a text field or a copy and paste with a stray
+   * newline still parses. The URL-safe characters `-` and `_` become `+`
+   * and `/`, then padding is added where the stripped length calls for it.
+   * A string already in the standard form comes back unchanged.
    * @param {string} value base64 in the standard or URL-safe alphabet, with
    * or without padding, and with or without surrounding whitespace
    * @returns {string} the same bytes in the standard alphabet with padding
@@ -180,18 +160,15 @@ class FodId {
     if (typeof value !== 'string') {
       throw new TypeError('value must be a string');
     }
-    let base64 = value.trim().replace(/-/g, '+').replace(/_/g, '/');
-    switch (base64.length % 4) {
-      case 2: base64 += '=='; break;
-      case 3: base64 += '='; break;
-    }
-    return base64;
+    return toStandardBase64(value);
   }
 
   /**
    * Converts a base64 string in either alphabet to the URL-safe alphabet
    * without padding, the inverse of {@link FodId.toStandardBase64}, so the
-   * value can be placed in a URL without further encoding.
+   * value can be placed in a URL without further encoding. The characters
+   * are swapped in the text, because `Buffer` and its `base64url` encoding
+   * do not exist in a browser.
    * @param {string} value base64 in the standard or URL-safe alphabet
    * @returns {string} the same bytes in the URL-safe alphabet, no padding
    */
@@ -300,7 +277,7 @@ class FodId {
 
   /** @returns {number} the IdType carried in bits 6-7 of the flags. */
   get type () {
-    return IdType.fromFlags(this._flags);
+    return this._read.type;
   }
 
   /**
@@ -309,7 +286,7 @@ class FodId {
    * @returns {number} a Usage value
    */
   get usage () {
-    return Usage.fromFlags(this._flags);
+    return this._read.usage;
   }
 
   /**
@@ -323,7 +300,7 @@ class FodId {
    * @returns {boolean}
    */
   get usageIsIndirect () {
-    return (this._flags & 0b1000) !== 0;
+    return this._read.usageIsIndirect;
   }
 
   /**
@@ -339,7 +316,7 @@ class FodId {
    * @returns {number} the raw field value
    */
   get licenseId () {
-    return this._licenseId;
+    return this._read.licenseId;
   }
 
   /**
@@ -374,7 +351,7 @@ class FodId {
    * no document this package knows, which is never an empty string
    */
   get terms () {
-    return Terms.url(Terms.fromIndex(this._termsIndex));
+    return this._read.terms;
   }
 
   /** @returns {number} the OWID version. */
@@ -425,7 +402,11 @@ class FodId {
     return FodId.toBase64Url(this._owid.data);
   }
 
-  /** @returns {Uint8Array} the OWID envelope as raw bytes. */
+  /**
+   * Decoded with `atob` and not Node's `Buffer`, which a browser does not
+   * have.
+   * @returns {Uint8Array} the OWID envelope as raw bytes.
+   */
   asByteArray () {
     return Uint8Array.from(atob(this._owid.data), (c) => c.charCodeAt(0));
   }
@@ -462,114 +443,6 @@ class FodId {
 }
 
 /**
- * Reads the 51Did fields out of an envelope payload, answering with a
- * status rather than throwing. This is the one walk of the payload, shared
- * by every surface that reads a 51Did. The type is read from the header and
- * decides the least the payload must hold after the header. The terms byte
- * follows the match key, and anything beyond the terms byte is a creator
- * context section whose lengths belong to the cloud, so a longer payload is
- * accepted whatever its length.
- * @param {Uint8Array} payload the payload bytes
- * @returns {{status: string, flags?: number, licenseId?: number,
- * matchKey?: Uint8Array, termsIndex?: number, length: number,
- * required: number, type?: number, payloadVersion?: number,
- * usageBits?: number}} `status` PARSED with the fields, or a 51Did status
- * with the length the type needed, and the version or the usage bits found
- * where that is what the payload was refused for
- */
-function unpack (payload) {
-  const length = payload.length;
-  if (length < layout.HEADER_LENGTH) {
-    return {
-      status: ParseStatus.PAYLOAD_TOO_SHORT,
-      length,
-      required: layout.HEADER_LENGTH
-    };
-  }
-  const flags = payload[layout.FLAGS_OFFSET];
-  // The version is read before any field, because a later version exists
-  // precisely because a field moved. Reading a payload of a version this
-  // package does not know under the layout it does know would answer with
-  // values that are wrong rather than absent, which is worse than
-  // refusing, and a version that nothing checks protects nothing.
-  const payloadVersion = (flags >> 4) & 0b11;
-  if (payloadVersion !== layout.SUPPORTED_PAYLOAD_VERSION) {
-    return {
-      status: ParseStatus.UNSUPPORTED_PAYLOAD_VERSION,
-      length,
-      required: layout.HEADER_LENGTH,
-      payloadVersion
-    };
-  }
-  // Usage bits 000 are not a usage. The cloud writes no flags byte without
-  // bit 0, so a payload carrying them is damaged or forged, and there is
-  // nothing a caller could do with a fourth usage that a refusal does not
-  // already say, being that the identifier must not be passed on.
-  const usageBits = flags & 0b111;
-  if (usageBits === 0) {
-    return {
-      status: ParseStatus.NO_USAGE,
-      length,
-      required: layout.HEADER_LENGTH,
-      usageBits
-    };
-  }
-  // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
-  // does not produce a negative number.
-  const licenseId = (
-    payload[layout.LICENSE_ID_OFFSET] |
-    (payload[layout.LICENSE_ID_OFFSET + 1] << 8) |
-    (payload[layout.LICENSE_ID_OFFSET + 2] << 16) |
-    (payload[layout.LICENSE_ID_OFFSET + 3] << 24)
-  ) >>> 0;
-  const type = IdType.fromFlags(flags);
-  let matchKeyLength;
-  if (type === IdType.RANDOM) {
-    matchKeyLength = layout.GUID_LENGTH;
-  } else if (type === IdType.RESERVED) {
-    // Not yet assigned, so read best-effort, whatever follows the header
-    // is the match key.
-    matchKeyLength = length - layout.HEADER_LENGTH;
-  } else {
-    matchKeyLength = layout.MATCH_KEY_LENGTH;
-  }
-  const required = layout.HEADER_LENGTH + matchKeyLength;
-  if (length < required) {
-    return {
-      status: ParseStatus.INVALID_TYPE_PAYLOAD_LENGTH,
-      length,
-      required,
-      type
-    };
-  }
-  // The terms byte sits after the match key, so where it sits follows the
-  // match key length the type selects. A payload with no byte to read is a
-  // terms index of zero, which says the terms are not stated, so absence
-  // and zero are the same answer and neither has to be told from the
-  // other.
-  //
-  // A Reserved type cannot carry a terms byte this reader can find, because
-  // the match key length for that type is not defined and every byte after
-  // the header is therefore the match key. Such an identifier reads as a
-  // terms index of zero, which is correct and is not a missing case here.
-  const termsOffset = layout.MATCH_KEY_OFFSET + matchKeyLength;
-  const termsIndex = termsOffset + layout.TERMS_LENGTH <= length
-    ? payload[termsOffset]
-    : Terms.NOT_STATED;
-  return {
-    status: ParseStatus.PARSED,
-    flags,
-    licenseId,
-    // slice() copies, so the stored match key is this identifier's own.
-    matchKey: payload.slice(
-      layout.MATCH_KEY_OFFSET, layout.MATCH_KEY_OFFSET + matchKeyLength),
-    termsIndex,
-    length,
-    required
-  };
-}
-
-/**
  * Turns the OWID library's read into a 51Did read. An OWID failure is
  * carried through with its status unchanged, and a success is then held to
  * the 51Did payload rules. The identifier is built without the public
@@ -583,8 +456,9 @@ function readEnvelope (read) {
   if (!read.ok) {
     return { ok: false, value: null, status: read.status };
   }
-  const unpacked = unpack(read.owid.payload);
-  if (unpacked.status !== ParseStatus.PARSED) {
+  const payload = read.owid.payload;
+  const unpacked = unpack(payload);
+  if (!unpacked.ok) {
     return {
       ok: false, value: null, status: unpacked.status, detail: unpacked
     };
@@ -592,9 +466,11 @@ function readEnvelope (read) {
   const fodId = Object.create(FodId.prototype);
   fodId._owid = read.owid;
   fodId._flags = unpacked.flags;
-  fodId._licenseId = unpacked.licenseId;
-  fodId._matchKey = unpacked.matchKey;
-  fodId._termsIndex = unpacked.termsIndex;
+  // slice() copies, so the stored match key is this identifier's own.
+  fodId._matchKey = payload.slice(
+    layout.MATCH_KEY_OFFSET,
+    layout.MATCH_KEY_OFFSET + unpacked.matchKeyLength);
+  fodId._read = unpacked;
   return { ok: true, value: fodId, status: ParseStatus.PARSED };
 }
 
