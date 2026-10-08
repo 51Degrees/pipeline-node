@@ -29,6 +29,11 @@
  * otherwise, a four byte payload length, the payload, and a 64 byte
  * signature with nothing after it.
  *
+ * The OWID library is not used because it comes as one piece, with
+ * signature checking and key handling that a bundler cannot leave out,
+ * and this reader is for a web page, which sends every byte it loads to
+ * every visitor.
+ *
  * Nothing here checks the signature or reads the domain or the date,
  * because the reader that uses this answers only for what the payload
  * says. The envelope format itself is specified at
@@ -55,14 +60,16 @@ const SIGNATURE_LENGTH = 64;
 function payloadOf (value) {
   let text;
   try {
+    // `atob` and not Node's `Buffer`, which a browser does not have.
     text = atob(toStandardBase64(value));
   } catch (e) {
     // Not a string, or not base 64.
     return null;
   }
   // Each character of the decoded text is one byte of the envelope. The
-  // fields before the payload are read from the text, so the only bytes
-  // copied are the payload's own.
+  // fields before the payload are read from the text and not through a
+  // `DataView`, which would need the whole envelope copied to bytes first,
+  // so the only bytes copied are the payload's own.
   const version = text.charCodeAt(0);
   // The domain ends at the first zero byte, which has to arrive within the
   // longest domain there can be.
@@ -87,6 +94,8 @@ function payloadOf (value) {
   if (text.length - payloadAt - SIGNATURE_LENGTH !== declared) {
     return null;
   }
+  // Copied in a plain loop, which needs no substring and no function call
+  // for each character, as `Uint8Array.from` over the text would.
   const payload = new Uint8Array(declared);
   for (let i = 0; i < declared; i++) {
     payload[i] = text.charCodeAt(payloadAt + i);

@@ -61,12 +61,16 @@ declare class FodId {
     static SignatureStatus: Readonly<Record<string, string>>;
     /**
      * Restores a base64 string in either alphabet to the standard alphabet
-     * with padding, which is the only form the OWID library decodes. Leading
-     * and trailing whitespace is stripped first, so a value carried through a
-     * log line, a text field or a copy and paste with a stray newline still
-     * parses. The URL-safe characters `-` and `_` become `+` and `/`, then
-     * padding is added where the stripped length calls for it. A string
-     * already in the standard form comes back unchanged.
+     * with padding, the form the cloud issues. This is written by hand
+     * because the OWID library decodes with `atob`, which refuses the
+     * URL-safe alphabet. Node's `Buffer` reads both alphabets, and a browser
+     * has no `Buffer`.
+     *
+     * Leading and trailing whitespace is stripped first, so a value carried
+     * through a log line, a text field or a copy and paste with a stray
+     * newline still parses. The URL-safe characters `-` and `_` become `+`
+     * and `/`, then padding is added where the stripped length calls for it.
+     * A string already in the standard form comes back unchanged.
      * @param {string} value base64 in the standard or URL-safe alphabet, with
      * or without padding, and with or without surrounding whitespace
      * @returns {string} the same bytes in the standard alphabet with padding
@@ -75,7 +79,9 @@ declare class FodId {
     /**
      * Converts a base64 string in either alphabet to the URL-safe alphabet
      * without padding, the inverse of {@link FodId.toStandardBase64}, so the
-     * value can be placed in a URL without further encoding.
+     * value can be placed in a URL without further encoding. The characters
+     * are swapped in the text, because `Buffer` and its `base64url` encoding
+     * do not exist in a browser.
      * @param {string} value base64 in the standard or URL-safe alphabet
      * @returns {string} the same bytes in the URL-safe alphabet, no padding
      */
@@ -271,7 +277,11 @@ declare class FodId {
      * @returns {string} the OWID as URL-safe base64, no padding
      */
     asBase64Url(): string;
-    /** @returns {Uint8Array} the OWID envelope as raw bytes. */
+    /**
+     * Decoded with `atob` and not Node's `Buffer`, which a browser does not
+     * have.
+     * @returns {Uint8Array} the OWID envelope as raw bytes.
+     */
     asByteArray(): Uint8Array;
     /**
      * Verifies the OWID signature against the supplied SPKI public key PEM,

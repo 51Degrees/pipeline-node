@@ -125,7 +125,8 @@ function unpack (payload) {
       usageBits
     };
   }
-  // Little-endian unsigned 32-bit. `>>> 0` forces unsigned so the high bit
+  // Little-endian unsigned 32-bit, read byte by byte so that no `DataView`
+  // is made for each identifier. `>>> 0` forces unsigned so the high bit
   // does not produce a negative number.
   const licenseId = (
     payload[layout.LICENSE_ID_OFFSET] |
