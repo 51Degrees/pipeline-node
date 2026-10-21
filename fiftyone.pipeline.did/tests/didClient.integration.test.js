@@ -23,8 +23,10 @@
 // Live tests against the cloud, run only when a resource key is set. The
 // aligned _51DEGREES_RESOURCE_KEY environment variable is checked first,
 // then the legacy RESOURCE_KEY variable, and without either the whole
-// file is skipped rather than failed. The endpoint follows
-// FOD_CLOUD_API_URL as the client does.
+// file is skipped rather than failed. A license key, needed to redeem
+// where the account holds one, is read from _51DEGREES_LICENSE_KEY_51DID
+// first, the name CI passes. The endpoint follows FOD_CLOUD_API_URL as the
+// client does.
 
 const {
   FodId, DidClient, ContextResult, DidNotSupportedError, Usage, IdType
@@ -32,8 +34,8 @@ const {
 
 const resourceKey = process.env._51DEGREES_RESOURCE_KEY ||
   process.env.RESOURCE_KEY || '';
-const licenceKey = process.env._51DEGREES_LICENSE_KEY ||
-  process.env.LICENSE_KEY || '';
+const licenceKey = process.env._51DEGREES_LICENSE_KEY_51DID ||
+  process.env._51DEGREES_LICENSE_KEY || process.env.LICENSE_KEY || '';
 
 const live = resourceKey ? describe : describe.skip;
 

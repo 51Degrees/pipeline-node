@@ -54,6 +54,9 @@ jobs:
         env:
           _51DEGREES_RESOURCE_KEY_BASIC: ${{ vars._51DEGREES_RESOURCE_KEY_BASIC }}
           _51DEGREES_RESOURCE_KEY_BESPOKE: ${{ secrets._51DEGREES_RESOURCE_KEY_BESPOKE }}
+          # Sent by the redeem test with every resource key, so the server
+          # side half of the creator context runs with a license key too.
+          _51DEGREES_LICENSE_KEY_51DID: ${{ secrets._51DEGREES_LICENSE_KEY_51DID }}
         run: |
           $keys = Get-ChildItem env: |
             Where-Object { $_.Name -like '_51DEGREES_RESOURCE_KEY*' -and $_.Value }
@@ -61,6 +64,7 @@ jobs:
             Write-Host 'No _51DEGREES_RESOURCE_KEY* secrets available; skipping.'
             exit 0
           }
+          Write-Host "License key for redeem: $(if ($env:_51DEGREES_LICENSE_KEY_51DID) { 'set' } else { 'not set' })"
           $failed = $false
           foreach ($k in $keys) {
             Write-Host "::group::didClient.integration with $($k.Name)"
