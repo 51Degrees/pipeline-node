@@ -23,17 +23,20 @@
 // Live tests against the cloud, run only when a resource key is set. The
 // aligned _51DEGREES_RESOURCE_KEY environment variable is checked first,
 // then the legacy RESOURCE_KEY variable, and without either the whole
-// file is skipped rather than failed. The endpoint follows
-// FOD_CLOUD_API_URL as the client does.
+// file is skipped rather than failed. A license key, needed to redeem
+// where the account holds one, is read from _51DEGREES_LICENSE_KEY_51DID
+// first, the name CI passes. The endpoint follows FOD_CLOUD_API_URL as the
+// client does.
 
 const {
-  FodId, DidClient, ContextResult, DidNotSupportedError, Usage, IdType
+  FodId, DidClient, ContextResult, SignatureResult, DidNotSupportedError,
+  Usage, IdType
 } = require('../index');
 
 const resourceKey = process.env._51DEGREES_RESOURCE_KEY ||
   process.env.RESOURCE_KEY || '';
-const licenceKey = process.env._51DEGREES_LICENSE_KEY ||
-  process.env.LICENSE_KEY || '';
+const licenceKey = process.env._51DEGREES_LICENSE_KEY_51DID ||
+  process.env._51DEGREES_LICENSE_KEY || process.env.LICENSE_KEY || '';
 
 const live = resourceKey ? describe : describe.skip;
 
@@ -218,4 +221,90 @@ live('DidClient against the cloud', () => {
       console.log(`Usage is indirect read on ${proven} identifier(s).`);
     }
   });
+
+  // A browser as the service judges one, and a second whose browser and
+  // platform differ, so the verdict names every factor.
+  const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+    'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
+    'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+
+  // What the 51Degrees client script collects and sends. The service
+  // creates no 51Did for a browser until all of these have reported.
+  const SNIPPETS = {
+    '51D_ScreenPixelsHeight': '1080',
+    '51D_ScreenPixelsWidth': '1920',
+    '51D_PixelRatio': '1',
+    '51D_GetHighEntropyValues':
+      'eyJicmFuZHMiOlt7ImJyYW5kIjoiQ2hyb21pdW0iLCJ2ZXJzaW9uIjoiMTQwIn1d' +
+      'LCJwbGF0Zm9ybSI6IldpbmRvd3MiLCJwbGF0Zm9ybVZlcnNpb24iOiIxNS4wLjAifQ',
+    '51D_ThirdPartyCookiesEnabled': 'true',
+    '51D_ProfileIds': '0',
+    '51D_IsVisible': 'true',
+    '51D_HasWebDriver': 'false'
+  };
+
+  // The factors a readable verdict reports, written out for the same
+  // reason as the terms address above.
+  const FACTORS = [
+    'transport', 'device', 'browserip', 'connectionip', 'asn',
+    'platformname', 'platformversion', 'browsername', 'browserversion'
+  ];
+
+  const browserGet = async (path, query, userAgent) => {
+    const url = client.endpoint + path + '?' +
+      new URLSearchParams(Object.assign({}, SNIPPETS, query));
+    const response = await fetch(url, {
+      headers: { 'User-Agent': userAgent }
+    });
+    const body = await response.text();
+    return { status: response.status, body };
+  };
+
+  test('redeem of a sealed result reads the verdict with a license key',
+    async () => {
+      // Created as a page creates it. Non-marketing, so every resource key
+      // is entitled to it and the pass without a license key runs too.
+      const created = await browserGet('json',
+        { resource: resourceKey, 'id.usage': 'non-marketing' }, CHROME);
+      expect({ status: created.status, body: created.body })
+        .toEqual({ status: 200, body: created.body });
+      const fodid = JSON.parse(created.body).fodid;
+      if (!fodid || typeof fodid.idprobglobal !== 'string') {
+        throw new Error('json answered without idprobglobal: ' +
+          JSON.stringify(fodid));
+      }
+
+      // The call a page makes, here from another browser.
+      const sealed = await browserGet(
+        'id/verify-context/' + encodeURIComponent(resourceKey),
+        { '51did': fodid.idprobglobal }, SAFARI);
+      if (sealed.status === 404) {
+        console.warn('Skipped: the host at ' + client.endpoint +
+          ' does not offer the creator context.');
+        return;
+      }
+      expect({ status: sealed.status, body: sealed.body })
+        .toEqual({ status: 200, body: sealed.body });
+      const answer = JSON.parse(sealed.body);
+      if (typeof answer.result !== 'string') {
+        throw new Error('verify-context answered without a sealed result, ' +
+          'so the host holds no context secret: ' + sealed.body);
+      }
+
+      const result = await client.redeem(fodid.idprobglobal, answer.result);
+      expect(result.statusCode).toBe(200);
+      if (!licenceKey) {
+        // Only a license key of the resource key's account opens it.
+        expect(result.context).toBe(ContextResult.UNREADABLE);
+        console.log('Redeemed without a license key: ' + result.raw);
+        return;
+      }
+      expect({ context: result.context, raw: result.raw })
+        .not.toEqual({ context: ContextResult.UNREADABLE, raw: result.raw });
+      expect(result.signature).toBe(SignatureResult.VERIFIED);
+      expect(Object.keys(result.factors || {}).sort())
+        .toEqual([...FACTORS].sort());
+      console.log('Redeemed with a license key: ' + result.raw);
+    });
 });
