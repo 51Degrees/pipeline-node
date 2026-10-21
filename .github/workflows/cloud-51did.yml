@@ -54,8 +54,11 @@ jobs:
         env:
           _51DEGREES_RESOURCE_KEY_BASIC: ${{ vars._51DEGREES_RESOURCE_KEY_BASIC }}
           _51DEGREES_RESOURCE_KEY_BESPOKE: ${{ secrets._51DEGREES_RESOURCE_KEY_BESPOKE }}
-          # Sent by the redeem test with every resource key, so the server
-          # side half of the creator context runs with a license key too.
+          _51DEGREES_RESOURCE_KEY_51DID: ${{ vars._51DEGREES_RESOURCE_KEY_51DID }}
+          # A license key redeems only with a resource key of the same
+          # account, so each is paired with the resource key of the same
+          # suffix. With any other resource key the cloud answers unreadable
+          # whatever the result, and the redeem would prove nothing.
           _51DEGREES_LICENSE_KEY_51DID: ${{ secrets._51DEGREES_LICENSE_KEY_51DID }}
         run: |
           $keys = Get-ChildItem env: |
@@ -64,11 +67,27 @@ jobs:
             Write-Host 'No _51DEGREES_RESOURCE_KEY* secrets available; skipping.'
             exit 0
           }
-          Write-Host "License key for redeem: $(if ($env:_51DEGREES_LICENSE_KEY_51DID) { 'set' } else { 'not set' })"
+          # Taken out of the environment so the test only sees the one that
+          # matches the resource key of each pass.
+          $licenses = @{}
+          Get-ChildItem env: |
+            Where-Object { $_.Name -like '_51DEGREES_LICENSE_KEY_*' } |
+            ForEach-Object {
+              if ($_.Value) { $licenses[$_.Name] = $_.Value }
+              Remove-Item "env:$($_.Name)"
+            }
           $failed = $false
           foreach ($k in $keys) {
             Write-Host "::group::didClient.integration with $($k.Name)"
             $env:_51DEGREES_RESOURCE_KEY = $k.Value
+            $licenseName = $k.Name -replace '^_51DEGREES_RESOURCE_KEY', '_51DEGREES_LICENSE_KEY'
+            if ($licenses.ContainsKey($licenseName)) {
+              $env:_51DEGREES_LICENSE_KEY_51DID = $licenses[$licenseName]
+              Write-Host "License key for redeem: $licenseName"
+            } else {
+              Remove-Item env:_51DEGREES_LICENSE_KEY_51DID -ErrorAction Ignore
+              Write-Host 'License key for redeem: none'
+            }
             npx jest tests/didClient.integration.test.js
             if ($LASTEXITCODE -ne 0) { $failed = $true }
             Write-Host '::endgroup::'
